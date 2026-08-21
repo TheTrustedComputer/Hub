@@ -1,6 +1,6 @@
 [submodule "fastmod"]
-    path = fastmod
-    url = https://github.com/lemire/fastmod
+	path = fastmod
+	url = https://github.com/lemire/fastmod
 [submodule "libdivide"]
-    path = libdivide
-    url = https://github.com/ridiculousfish/libdivide
+	path = libdivide
+	url = https://github.com/ridiculousfish/libdivide
