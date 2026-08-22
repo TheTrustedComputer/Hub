@@ -18,10 +18,9 @@
 #ifndef NEGASCOUT_H
 #define NEGASCOUT_H
 
-static constexpr int16_t NS_STR_ASP = 1;
 static constexpr int16_t NS_WIN_VAL = 30000;
 static constexpr int16_t NS_WIN_THR = NS_WIN_VAL - 10000;
-static constexpr int16_t NS_PROG = 2;
+static constexpr int16_t NS_PROG = 1;
 static constexpr int16_t NS_DRAW = 0;
 static constexpr uint16_t NS_MAX_DEPTH = INT16_MAX;
 
@@ -606,7 +605,7 @@ static inline Result NegaScout_Connect4_original_iterative(Connect4 *const restr
     {
         _PRINT ? printf(FTW_STR_SOLVING_FINITE, i, DEPTH), fflush(stdout) : FTW_VOID_NOP;
 
-        if (abs((val = NegaScout_Connect4_search(_c4, i, -NS_STR_ASP, NS_STR_ASP))) >= NS_WIN_THR)
+        if (abs((val = NegaScout_Connect4_search(_c4, i, -NS_PROG, NS_PROG))) >= NS_WIN_THR)
         {
             break;
         }
@@ -631,7 +630,6 @@ static inline Result NegaScout_Connect4_popout_iterative(Connect4 *const restric
 
     const uint16_t POP_DEPTH = BOARD_AREA < 128 ? UINT8_MAX : NS_MAX_DEPTH;
     const uint16_t DEPTH = _c4->plies > POP_DEPTH ? _c4->plies : POP_DEPTH;
-    constexpr int16_t ASP = NS_PROG + 1; // Aspiration window size (repurposed)
 
     uint64_t nodePrev = 0, nodeDelta = 0; int16_t val = NS_DRAW;
 
@@ -643,7 +641,7 @@ static inline Result NegaScout_Connect4_popout_iterative(Connect4 *const restric
     {
         _PRINT ? printf(FTW_STR_SOLVING_INFINITE, i), fflush(stdout) : FTW_VOID_NOP;
 
-        if (abs((val = NegaScout_Connect4_search(_c4, i, -ASP, ASP))) >= NS_WIN_THR)
+        if (abs((val = NegaScout_Connect4_search(_c4, i, -NS_PROG, NS_PROG))) >= NS_WIN_THR)
         {
             goto NegaScout_Connect4_popout_iterative_solved;
         }
@@ -687,7 +685,6 @@ static inline Result NegaScout_Connect4_pop10_iterative(Connect4 *const restrict
     NS_nodes = 0;
 
     const uint16_t DEPTH = _c4->plies > NS_MAX_DEPTH ? _c4->plies : NS_MAX_DEPTH;
-    constexpr int16_t ASP = NS_PROG + 1;
 
     uint64_t nodePrev = 0, nodeDelta = 0; int16_t val = NS_DRAW;
 
@@ -704,7 +701,7 @@ static inline Result NegaScout_Connect4_pop10_iterative(Connect4 *const restrict
     {
         _PRINT ? printf(FTW_STR_SOLVING_INFINITE, i), fflush(stdout) : FTW_VOID_NOP;
 
-        if (abs((val = NegaScout_Connect4_pop10_search(_c4, _p10, i, -ASP, ASP))) >= NS_WIN_THR)
+        if (abs((val = NegaScout_Connect4_pop10_search(_c4, _p10, i, -NS_PROG, NS_PROG))) >= NS_WIN_THR)
         {
             goto NegaScout_Connect4_pop10_iterative_solved;
         }
@@ -758,7 +755,7 @@ static inline Result NegaScout_Make7_iterative(const Make7 *const restrict _M7, 
     {
         _PRINT ? printf(FTW_STR_SOLVING_FINITE, i, DEPTH), fflush(stdout) : FTW_VOID_NOP;
 
-        if (abs((val = NegaScout_Make7_search(_M7, i, -NS_STR_ASP, NS_STR_ASP))) >= NS_WIN_THR || val == NS_DRAW)
+        if (abs((val = NegaScout_Make7_search(_M7, i, -NS_PROG, NS_PROG))) >= NS_WIN_THR || val == NS_DRAW)
         {
             break;
         }
@@ -1525,11 +1522,13 @@ static inline void NegaScout_Connect4_PGO(void)
 
     for (C4_variant = CONNECT4_ORIGINAL; C4_variant <= CONNECT4_POP10; C4_variant++)
     {
-        printf(FTW_STR_PGO_START, FTW_STR_CONNECT4, FTW_STR_VARIANTS[C4_variant]);
+        const bool PGO_POP10 = C4_variant == CONNECT4_POP10;
+
+        printf(FTW_STR_PGO_START, FTW_STR_CONNECT4, PGO_POP10 ? FTW_STR_POP10 : FTW_STR_VARIANTS[C4_variant]);
 
         Connect4_prepare(7, 6);
         Connect4_init(&profC4);
-        C4_variant == CONNECT4_POP10 ? Connect4_pop10_reset(&profC4, &profP10) : FTW_VOID_NOP;
+        PGO_POP10 ? Connect4_pop10_reset(&profC4, &profP10) : FTW_VOID_NOP;
         Connect4_funcPtrs_init();
         Connect4_globals_init();
 
@@ -1540,7 +1539,7 @@ static inline void NegaScout_Connect4_PGO(void)
 
         for (uint8_t i = 0; i < 100; i++)
         {
-            while (C4_variant == CONNECT4_POP10 ? !Connect4_pop10_over(&profP10) : !Connect4_over(&profC4))
+            while (PGO_POP10 ? !Connect4_pop10_over(&profP10) : !Connect4_over(&profC4))
             {
                 switch (C4_variant)
                 {
@@ -1572,7 +1571,7 @@ static inline void NegaScout_Connect4_PGO(void)
                 }
             }
 
-            C4_variant == CONNECT4_POP10 ? Connect4_pop10_reset(&profC4, &profP10) : Connect4_reset(&profC4);
+            PGO_POP10 ? Connect4_pop10_reset(&profC4, &profP10) : Connect4_reset(&profC4);
         }
 
         Connect4_destroy(&profC4);
@@ -1621,7 +1620,7 @@ static inline void NegaScout_Make7_PGO(void)
 
         while (!Make7_over(&profM7))
         {
-            NegaScout_Make7_search(&profM7, 9, -NS_WIN_VAL, NS_WIN_VAL);
+            NegaScout_Make7_search(&profM7, 8, -NS_WIN_VAL, NS_WIN_VAL);
             Make7_generate(&profM7, colArr, &colNum);
 
             const uint8_t PGO_MOVE = colArr[Xoshiro128pp_nextN(&g_rng, colNum)];

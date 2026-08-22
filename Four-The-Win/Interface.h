@@ -39,7 +39,7 @@ static inline void Interface_help(void)
 #ifdef FTW_SQLITE
     puts(" delete     Delete all results from the database.");
 #endif
-    puts(" emoji      Toggle board emojis (requires font support).");
+    puts(" emoji      Enable board emojis (requires font support).");
     printf(" exit       %s Alternative: quit.\n", FTW_STR_CLOSE_APP);
     printf(" help       Display available commands. %s: ?.\n", FTW_STR_SHORT_ALIAS);
     printf(" hist       Show the move history. %s: y.\n", FTW_STR_SHORT_ALIAS);
@@ -581,7 +581,6 @@ void Interface_Make7_perft(PerftStat *const restrict _stats, const Make7 *const 
         !Make7_over(&perftM7) ? Interface_Make7_perft(_stats, &perftM7, _D - 1) : _stats->nodes++;
         perftM7 = *_M7;
     }
-
 }
 
 ////////////////////////////////////////////////////////////////
@@ -645,7 +644,7 @@ static inline void Interface_run(void)
     if (UI_IS_MAKE7)
     {
         M7_targetMethod = true;
-        UI_c4NotReady ? puts(FTW_STR_MAKE7_RULESET), UI_c4NotReady = false : FTW_VOID_NOP;
+        UI_c4NotReady ? (puts(FTW_STR_MAKE7_RULESET), UI_c4NotReady = false) : FTW_VOID_NOP;
         Make7_setTargetMethod();
         printf("Using the %s win criterion\n", M7_targetMethod ? FTW_STR_WINDOWING : FTW_STR_EXACT);
         Make7_init(&UI_m7);
@@ -655,7 +654,7 @@ static inline void Interface_run(void)
     {
         if (UI_c4NotReady)
         {
-            UI_IS_POP10 ? puts(FTW_STR_POP10_RULESET) : printf(FTW_STR_PLAYING_RULSET, FTW_STR_CONNECT4, FTW_STR_VARIANTS[C4_variant]);
+            printf(FTW_STR_PLAYING_RULSET, FTW_STR_CONNECT4, UI_IS_POP10 ? FTW_STR_POP10 : FTW_STR_VARIANTS[C4_variant]);
             UI_c4NotReady = false;
         }
 
@@ -684,14 +683,9 @@ static inline void Interface_run(void)
 #ifdef FTW_SQLITE
     char dbName[32]; bool dbQuery;
 
-    UI_IS_MAKE7 ? sprintf(dbName, "%s.db",  FTW_STR_VARIANTS[C4_variant]) : sprintf(dbName, "%ux%u_%s.db", COLS, ROWS, FTW_STR_VARIANTS[C4_variant]);
+    UI_IS_MAKE7 ? sprintf(dbName, "%s.db", FTW_STR_VARIANTS[C4_variant]) : sprintf(dbName, "%ux%u_%s.db", COLS, ROWS, FTW_STR_VARIANTS[C4_variant]);
     SQLite_open(&database, dbName);
-
-    if (UI_IS_POP10)
-    {
-        SQLite_delete(database);
-    }
-
+    UI_IS_POP10 ? SQLite_delete(database) : FTW_VOID_NOP;
 #else
     ResultRing_reset();
 #endif
@@ -881,14 +875,7 @@ static inline void Interface_run(void)
                         break;
                     }
 #else
-                    if (UI_IS_MAKE7)
-                    {
-                        ResultRing_insert(m7Key, t1Key, t2Key, result);
-                    }
-                    else
-                    {
-                        ResultRing_insert(c4Key, ptKey, UINT64_MAX, result);
-                    }
+                    UI_IS_MAKE7 ? ResultRing_insert(m7Key, t1Key, t2Key, result) : ResultRing_insert(c4Key, ptKey, UINT64_MAX, result);
 #endif
                 }
 
@@ -941,8 +928,6 @@ static inline void Interface_run(void)
             if (UI_IS_MAKE7)
             {
                 Make7_print(&UI_m7);
-                memset(UI_m7MoveHist, 0, sizeof(UI_m7MoveHist));
-
                 UI_m7UndoIdx = 0;
             }
             else
@@ -984,7 +969,7 @@ static inline void Interface_run(void)
         {
             if (winner == -1)
             {
-                policyMove = UI_IS_MAKE7 ? '\0': Connect4_policy(&UI_c4);
+                policyMove = UI_IS_MAKE7 ? Connect4_noMovePolicy(&UI_c4) : Connect4_policy(&UI_c4);
 
                 switch (C4_variant)
                 {
@@ -999,10 +984,7 @@ static inline void Interface_run(void)
                     break;
                 }
 
-                if (policyMove)
-                {
-                    bestMove = policyMove;
-                }
+                bestMove = policyMove ? policyMove : bestMove;
 
                 printf("Recommended move: %c%c\n", UI_IS_MAKE7 ? m7MovChr[0] : bestMove, UI_IS_MAKE7 * m7MovChr[1]);
                 putchar('\a');
@@ -1029,10 +1011,7 @@ static inline void Interface_run(void)
                         break;
                     }
 
-                    if (!UI_IS_MAKE7 && (policyMove = Connect4_policy(&UI_c4)))
-                    {
-                        bestMove = policyMove;
-                    }
+                    bestMove = !UI_IS_MAKE7 && (policyMove = Connect4_policy(&UI_c4)) ? policyMove : bestMove;
                 }
 
                 switch (C4_variant)
@@ -1177,7 +1156,15 @@ static inline void Interface_run(void)
             }
             else
             {
-                printf("%s %s\n", FTW_STR_CONNECT4, FTW_STR_VARIANTS[C4_variant]);
+                switch (C4_variant)
+                {
+                default:
+                    printf("%s %s\n", FTW_STR_CONNECT4, UI_IS_POP10 ? FTW_STR_POP10 : FTW_STR_VARIANTS[C4_variant]);
+                    break;
+                case CONNECT4_MAKE7:
+                    printf("%s\n", FTW_STR_MAKE7);
+                    break;
+                }
             }
         }
 #ifdef FTW_SQLITE

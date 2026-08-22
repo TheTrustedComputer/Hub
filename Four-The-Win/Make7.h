@@ -69,6 +69,18 @@ static constexpr uint8_t MAKE7_DIR_TABLE[3] = { MAKE7_SIZE_P1, MAKE7_SIZE, MAKE7
 static constexpr uint8_t MAKE7_OFF_SHIFTS[3] = { MAKE7_OFF1_SHIFT, MAKE7_OFF2_SHIFT, MAKE7_OFF3_SHIFT };
 static constexpr uint8_t MAKE7_OFF_MASKS[3] = { MAKE7_OFF1_MASK, MAKE7_OFF2_MASK, MAKE7_OFF3_MASK };
 
+// Bitmask table of adjacent tiles
+// 1 1 1
+// 1 0 1
+// 1 1 1
+static constexpr uint64_t ADJ_BITMASK_TABLE[55] = { 0x302ull, 0x705ull, 0xe0aull, 0x1c14ull, 0x3828ull, 0x7050ull, 0x6020ull, 0x0ull,
+                                                    0x30203ull, 0x70507ull, 0xe0a0eull, 0x1c141cull, 0x382838ull, 0x705070ull, 0x602060ull, 0x0ull,
+                                                    0x3020300ull, 0x7050700ull, 0xe0a0e00ull, 0x1c141c00ull, 0x38283800ull, 0x70507000ull, 0x60206000ull, 0x0ull,
+                                                    0x302030000ull, 0x705070000ull, 0xe0a0e0000ull, 0x1c141c0000ull, 0x3828380000ull, 0x7050700000ull, 0x6020600000ull, 0x0ull,
+                                                    0x30203000000ull, 0x70507000000ull, 0xe0a0e000000ull, 0x1c141c000000ull, 0x382838000000ull, 0x705070000000ull, 0x602060000000ull, 0x0ull,
+                                                    0x3020300000000ull, 0x7050700000000ull, 0xe0a0e00000000ull, 0x1c141c00000000ull, 0x38283800000000ull, 0x70507000000000ull, 0x60206000000000ull, 0x0ull,
+                                                    0x302030000000000ull, 0x705070000000000ull, 0xe0a0e0000000000ull, 0x1c141c0000000000ull, 0x3828380000000000ull, 0x7050700000000000ull, 0x6020600000000000ull };
+
 static uint64_t MAKE7_SM_SALT, MAKE7_T1_SALT, MAKE7_T2_SALT;
 static bool M7_targetMethod, (*Make7_targetSum_choice)(const uint64_t, const uint64_t, const uint64_t, const uint64_t, const uint8_t);
 
@@ -299,6 +311,11 @@ static inline void Make7_generate(const Make7 *const restrict _M7, uint8_t _arr[
     uint64_t tileColMask = MOVE_COL_MASK & MAKE7_THREES_MASK;
     uint8_t tilePosition = 0; *_num = 0;
 
+#ifdef __clang__
+    #pragma clang loop unroll(enable)
+#elifdef __GNUC__
+    #pragma GCC unroll 3
+#endif
     for (uint8_t tileIndex = 3; tileIndex--;)
     {
         const uint8_t TILE_SHIFT = tileIndex << 3;
@@ -438,34 +455,38 @@ static inline bool Make7_targetSum(const Make7 *const restrict _M7)
     const uint64_t PLAYER_TWOS_BITMASK = PLAYER_ALL_BITMASK & _M7->tile2;
     const uint64_t PLAYER_THREES_BITMASK = PLAYER_ALL_BITMASK ^ (PLAYER_ONES_BITMASK | PLAYER_TWOS_BITMASK);
     const uint64_t NONLAST_TILE_BITMASK = PLAYER_ALL_BITMASK ^ _M7->lastCol;
+    const uint8_t LAST_DROP_TILE_INDEX = stdc_trailing_zeros_ull(_M7->lastCol);
 
-    uint64_t tileMask = NONLAST_TILE_BITMASK, tileRun = _M7->lastCol; uint8_t tileCnt = 1;
-
-    for (; tileMask & _M7->lastCol >> 1; tileMask &= tileMask << 1, tileCnt++, tileRun |= tileRun >> 1); // Vertical
-
-    if (tileCnt >= 3 && Make7_targetSum_choice(PLAYER_ONES_BITMASK, PLAYER_TWOS_BITMASK, PLAYER_THREES_BITMASK, tileRun, M7_targetMethod ? 1 : tileCnt))
+    if ((LAST_DROP_TILE_INDEX != 64) * (NONLAST_TILE_BITMASK & ADJ_BITMASK_TABLE[LAST_DROP_TILE_INDEX]))
     {
-        return true;
-    }
+        uint64_t tileMask = NONLAST_TILE_BITMASK, tileRun = _M7->lastCol; uint8_t tileCnt = 1;
 
-#ifdef __clang__
-    #pragma clang loop unroll(enable)
-#elifdef __GNUC__
-    #pragma GCC unroll 3
-#endif
-    for (uint8_t dir = 0; dir < 3; dir++)
-    {
-        const uint8_t SHIFTER = MAKE7_DIR_TABLE[dir];
+        for (; tileMask & _M7->lastCol >> 1; tileMask &= tileMask << 1, tileCnt++, tileRun |= tileRun >> 1); // Vertical
 
-        tileRun = _M7->lastCol;
-        tileCnt = 1;
-
-        for (tileMask = NONLAST_TILE_BITMASK; tileMask & _M7->lastCol << SHIFTER; tileMask &= tileMask >> SHIFTER, tileCnt++, tileRun |= tileRun << SHIFTER);
-        for (tileMask = NONLAST_TILE_BITMASK; tileMask & _M7->lastCol >> SHIFTER; tileMask &= tileMask << SHIFTER, tileCnt++, tileRun |= tileRun >> SHIFTER);
-
-        if (tileCnt >= 3 && Make7_targetSum_choice(PLAYER_ONES_BITMASK, PLAYER_TWOS_BITMASK, PLAYER_THREES_BITMASK, tileRun, M7_targetMethod ? SHIFTER : tileCnt))
+        if (tileCnt >= 3 && Make7_targetSum_choice(PLAYER_ONES_BITMASK, PLAYER_TWOS_BITMASK, PLAYER_THREES_BITMASK, tileRun, M7_targetMethod ? 1 : tileCnt))
         {
             return true;
+        }
+
+#ifdef __clang__
+        #pragma clang loop unroll(enable)
+#elifdef __GNUC__
+        #pragma GCC unroll 3
+#endif
+        for (uint8_t dir = 0; dir < 3; dir++)
+        {
+            const uint8_t SHIFTER = MAKE7_DIR_TABLE[dir];
+
+            tileRun = _M7->lastCol;
+            tileCnt = 1;
+
+            for (tileMask = NONLAST_TILE_BITMASK; tileMask & _M7->lastCol << SHIFTER; tileMask &= tileMask >> SHIFTER, tileCnt++, tileRun |= tileRun << SHIFTER);
+            for (tileMask = NONLAST_TILE_BITMASK; tileMask & _M7->lastCol >> SHIFTER; tileMask &= tileMask << SHIFTER, tileCnt++, tileRun |= tileRun >> SHIFTER);
+
+            if (tileCnt >= 3 && Make7_targetSum_choice(PLAYER_ONES_BITMASK, PLAYER_TWOS_BITMASK, PLAYER_THREES_BITMASK, tileRun, M7_targetMethod ? SHIFTER : tileCnt))
+            {
+                return true;
+            }
         }
     }
 
