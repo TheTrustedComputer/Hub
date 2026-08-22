@@ -62,7 +62,7 @@ static inline void Interface_help(void)
     puts(" size W H   Set the game board dimensions to W x H (Connect 4).");
     printf(" solve      Solve this position. %s: s.\n", FTW_STR_SHORT_ALIAS);
     puts(" table T    Adjust the transposition table size (T = [inc/dec]).");
-    printf(" tgwin      Toggle the Make 7 win condition (%s, %s).\n", FTW_STR_EXACT, FTW_STR_WINDOWING);
+    printf(" tgwin      Toggle the Make 7 win method (%s/%s).\n", FTW_STR_EXACT, FTW_STR_WINDOWING);
     puts(" tiles      Obtain the remaining tiles per player (Make 7).");
     printf(" undo       Undo the last move. %s: u.\n", FTW_STR_SHORT_ALIAS);
     printf(" view       View solutions for each move. %s: v.\n", FTW_STR_SHORT_ALIAS);
@@ -646,7 +646,7 @@ static inline void Interface_run(void)
         M7_targetMethod = true;
         UI_c4NotReady ? (puts(FTW_STR_MAKE7_RULESET), UI_c4NotReady = false) : FTW_VOID_NOP;
         Make7_setTargetMethod();
-        printf("Using the %s win criterion\n", M7_targetMethod ? FTW_STR_WINDOWING : FTW_STR_EXACT);
+        printf("Using the %s win method\n", M7_targetMethod ? FTW_STR_WINDOWING : FTW_STR_EXACT);
         Make7_init(&UI_m7);
         Make7_print(&UI_m7);
     }
