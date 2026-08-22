@@ -1,0 +1,15 @@
+*/Debug/
+*/Release/
+*/gmon.out
+*/perf.data
+*/*.fdata
+*/*.profdata
+*/*.gcda
+*/*_clangprof
+*/*_gccprof
+
+ghp_*
+
+Four-The-Win/FourTheWin
+Four-The-Win/*.db*
+Video-Poker/VideoPoker
