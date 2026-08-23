@@ -89,7 +89,7 @@ static bool M7_targetMethod, (*Make7_targetSum_choice)(const uint64_t, const uin
 typedef struct
 {
     uint64_t mask, side;    // Bitmap of player/occupied tiles
-    uint64_t tile2, tile1;  // Bitmap of tiles of value 1 / 2 (3 is implicit)
+    uint64_t tile1, tile2;  // Bitmap of tiles of value 1 / 2 (3 is implicit)
     uint64_t lastCol;       // Last dropped tile column bit index
     uint32_t avails;        // Bitfield of available tiles (see below for layout)
     uint8_t turn;           // Player turn (0=P1; 1=P2)
@@ -340,39 +340,14 @@ static inline void Make7_generate(const Make7 *const restrict _M7, uint8_t _arr[
 /// @param  _P_T2   Bitmap of player tiles of value 2.
 /// @param  _P_T3   Bitmap of player tiles of value 3.
 /// @param  _T_RUN  Bitmask of running tiles.
-/// @param  _COUNT  Number of tiles in the current window.
+/// @param  _DUMMY  Unused parameter (number of tiles in window).
 /// @return        `true` if the target is met; otherwise `false`.
 //////////////////////////////////////////////////////////////////////////////
-static inline bool Make7_targetSum_exact(const uint64_t _P_T1, const uint64_t _P_T2, const uint64_t _P_T3, const uint64_t _T_RUN, const uint8_t _COUNT)
+static inline bool Make7_targetSum_exact(const uint64_t _P_T1, const uint64_t _P_T2, const uint64_t _P_T3, const uint64_t _T_RUN, const uint8_t _DUMMY)
 {
-    uint8_t ones, twos, threes;
+    (void)(_DUMMY);
 
-    switch (_COUNT)
-    {
-    case 3: // [3+3+1, 3+2+2]
-        ones = stdc_count_ones_ull(_P_T1 & _T_RUN);
-        twos = stdc_count_ones_ull(_P_T2 & _T_RUN);
-        threes = stdc_count_ones_ull(_P_T3 & _T_RUN);
-        return (ones == 1 && threes == 2) || (twos == 2 && threes == 1);
-    case 4: // [3+2+1+1, 2+2+2+1]
-        ones = stdc_count_ones_ull(_P_T1 & _T_RUN);
-        twos = stdc_count_ones_ull(_P_T2 & _T_RUN);
-        threes = stdc_count_ones_ull(_P_T3 & _T_RUN);
-        return (ones == 2 && twos == 1 && threes == 1) || (ones == 1 && twos == 3);
-    case 5: // [3+1+1+1+1, 2+2+1+1+1]
-        ones = stdc_count_ones_ull(_P_T1 & _T_RUN);
-        twos = stdc_count_ones_ull(_P_T2 & _T_RUN);
-        threes = stdc_count_ones_ull(_P_T3 & _T_RUN);
-        return (ones == 4 && threes == 1) || (ones == 3 && twos == 2);
-    case 6: // [2+1+1+1+1+1]
-        ones = stdc_count_ones_ull(_P_T1 & _T_RUN);
-        twos = stdc_count_ones_ull(_P_T2 & _T_RUN);
-        return ones == 5 && twos == 1;
-    case 7: // [1+1+1+1+1+1+1]
-        return stdc_count_ones_ull(_P_T1 & _T_RUN) == 7;
-    }
-
-    return false;
+    return stdc_count_ones_ull(_P_T1 & _T_RUN) + 2 * stdc_count_ones_ull(_P_T2 & _T_RUN) + 3 * stdc_count_ones_ull(_P_T3 & _T_RUN) == 7;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -451,13 +426,13 @@ static inline bool Make7_targetSum(const Make7 *const restrict _M7)
     const uint64_t NONLAST_TILE_BITMASK = PLAYER_ALL_BITMASK ^ _M7->lastCol;
     const uint8_t LAST_DROP_TILE_INDEX = stdc_trailing_zeros_ull(_M7->lastCol);
 
-    if ((LAST_DROP_TILE_INDEX != 64) * (NONLAST_TILE_BITMASK & ADJ_BITMASK_TABLE[LAST_DROP_TILE_INDEX]))
+    if ((LAST_DROP_TILE_INDEX != 64) && (NONLAST_TILE_BITMASK & ADJ_BITMASK_TABLE[LAST_DROP_TILE_INDEX]))
     {
         uint64_t tileMask = NONLAST_TILE_BITMASK, tileRun = _M7->lastCol; uint8_t tileCnt = 1;
 
         for (; tileMask & _M7->lastCol >> 1; tileMask &= tileMask << 1, tileCnt++, tileRun |= tileRun >> 1); // Vertical
 
-        if (tileCnt >= 3 && Make7_targetSum_choice(PLAYER_ONES_BITMASK, PLAYER_TWOS_BITMASK, PLAYER_THREES_BITMASK, tileRun, M7_targetMethod ? 1 : tileCnt))
+        if (tileCnt >= 3 && Make7_targetSum_choice(PLAYER_ONES_BITMASK, PLAYER_TWOS_BITMASK, PLAYER_THREES_BITMASK, tileRun, 1))
         {
             return true;
         }
@@ -477,7 +452,7 @@ static inline bool Make7_targetSum(const Make7 *const restrict _M7)
             for (tileMask = NONLAST_TILE_BITMASK; tileMask & _M7->lastCol << SHIFTER; tileMask &= tileMask >> SHIFTER, tileCnt++, tileRun |= tileRun << SHIFTER);
             for (tileMask = NONLAST_TILE_BITMASK; tileMask & _M7->lastCol >> SHIFTER; tileMask &= tileMask << SHIFTER, tileCnt++, tileRun |= tileRun >> SHIFTER);
 
-            if (tileCnt >= 3 && Make7_targetSum_choice(PLAYER_ONES_BITMASK, PLAYER_TWOS_BITMASK, PLAYER_THREES_BITMASK, tileRun, M7_targetMethod ? SHIFTER : tileCnt))
+            if (tileCnt >= 3 && Make7_targetSum_choice(PLAYER_ONES_BITMASK, PLAYER_TWOS_BITMASK, PLAYER_THREES_BITMASK, tileRun, SHIFTER))
             {
                 return true;
             }
