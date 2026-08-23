@@ -56,7 +56,7 @@ static constexpr uint64_t MAKE7_TOP_ROW = 0x40404040404040;
 static constexpr uint64_t MAKE7_COL_MASK = 0x7f;
 static constexpr uint64_t MAKE7_ALL_COL_MASK = 0xff;
 static constexpr uint64_t MAKE7_THREES_MASK = 0x4102008201004;
-static constexpr uint32_t MAKE7_INIT_AVAILS = 0x25dcbb;
+static constexpr uint32_t MAKE7_INIT_AVAILS = 0x25dcbb; // [P2_33322221111][P1_33322221111]
 
 // Make 7 column move ordering strategy (different from Connect 4)
 static constexpr uint8_t MAKE7_COL_ORDER[MAKE7_SIZE] = { 2, 4, 1, 5, 3, 0, 6 };
@@ -334,15 +334,15 @@ static inline void Make7_generate(const Make7 *const restrict _M7, uint8_t _arr[
     }
 }
 
-////////////////////////////////////////////////////////////////////////////
-/// @brief          Helper for `Make7_targetSum()` to detect exact matches.
+//////////////////////////////////////////////////////////////////////////////
+/// @brief          Does the entire maximal run of tiles meet the target sum?
 /// @param  _P_T1   Bitmap of player tiles of value 1.
 /// @param  _P_T2   Bitmap of player tiles of value 2.
 /// @param  _P_T3   Bitmap of player tiles of value 3.
 /// @param  _T_RUN  Bitmask of running tiles.
 /// @param  _COUNT  Number of tiles in the current window.
 /// @return        `true` if the target is met; otherwise `false`.
-////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
 static inline bool Make7_targetSum_exact(const uint64_t _P_T1, const uint64_t _P_T2, const uint64_t _P_T3, const uint64_t _T_RUN, const uint8_t _COUNT)
 {
     uint8_t ones, twos, threes;
@@ -375,21 +375,20 @@ static inline bool Make7_targetSum_exact(const uint64_t _P_T1, const uint64_t _P
     return false;
 }
 
-//////////////////////////////////////////////////////////////////////////////
-/// @brief          Helper for `Make7_targetSum()` to slide windows of tiles.
+//////////////////////////////////////////////////////////////////////////
+/// @brief          Finds a sub-run of tiles that reaches the target sum.
 /// @param  _P_T1   Bitmap of player tiles of value 1.
 /// @param  _P_T2   Bitmap of player tiles of value 2.
-/// @param  _DUMMY  Unused parameter.
+/// @param  _DUMMY  Unused parameter (tiles of value 3).
 /// @param  _T_RUN  Bitmask of running tiles.
 /// @param  _S_DIR  Adjacent tiles shift direction.
 /// @param  _CNT    Number of tiles in the current window.
 /// @return        `true` if the target is met; otherwise `false`.
-/////////////////////////////////////////////////////////////////////////////
-static inline bool Make7_targetSum_slider(const uint64_t _P_T1, const uint64_t _P_T2, const uint64_t _DUMMY, const uint64_t _T_RUN, const uint8_t _S_DIR)
+//////////////////////////////////////////////////////////////////////////
+static inline bool Make7_targetSum_window(const uint64_t _P_T1, const uint64_t _P_T2, const uint64_t _DUMMY, const uint64_t _T_RUN, const uint8_t _S_DIR)
 {
     (void)(_DUMMY);
 
-    // Search tiles in this direction; it is guaranteed that at least one adjacent tile will be found.
     // We use a 16-bit integer to store binary-encoded adjacent tiles (2 bits per tile; 7 tiles max; 14 bits).
     // 00: empty
     // 01: #1 tiles
@@ -404,8 +403,7 @@ static inline bool Make7_targetSum_slider(const uint64_t _P_T1, const uint64_t _
     }
     while ((tileBit <<= _S_DIR) & _T_RUN);
 
-    // Add all found adjacent tiles and see if they "Make 7": reach the target sum of 7.
-    // There are 8 unique ways given numbers 1, 2, and 3, equalling 44 combinations:
+    // There are 8 unique ways to add given numbers 1, 2, and 3:
     //
     // 1. 3+3+1 = 7
     // 2. 3+2+2 = 7
@@ -416,13 +414,9 @@ static inline bool Make7_targetSum_slider(const uint64_t _P_T1, const uint64_t _
     // 7. 2+1+1+1+1+1 = 7
     // 8. 1+1+1+1+1+1+1 = 7
     //
-    // Addition is commutative; they can be in any order: 3+3+1 = 3+1+3 = 1+3+3 = 7.
-    // Partial sums are allowed as long they are in sequence: 3+3+1+2 is a winner, but 3+3+2+1 is not!
-    // In other words, there can be a superset of the above eight ways of adding to 7.
-    //
-    // Below is a variant of the sliding window algorithm starting with a window size of 3 when the window sum exceeds 7.
-    // This approach does not use traditional arrays; thus, it reduces the memory access overhead, making this more efficient.
-    // We offer an exact approach that uses the population count. Compile with -DFTW_NO_SLIDERS to turn this feature on.
+    // Addition is commutative; the sum can be in any order. Thus, that figure jumps to 44 ways.
+    // Below is the sliding window algorithm starting with a window size of 3 when the window sum exceeds 7.
+    // This approach does not use auxiliary arrays; thus, reducing the overhead of a memory access.
     //
     // 0x3  = 00000000000011
     // 0xc  = 00000000001100
@@ -443,11 +437,11 @@ static inline bool Make7_targetSum_slider(const uint64_t _P_T1, const uint64_t _
     return false;
 }
 
-////////////////////////////////////////////////////////////////
-/// @brief  Checks if the last player formed a target sum of 7.
+//////////////////////////////////////////////////////////////////////////////////////
+/// @brief  Checks whether a maximal run of player tiles matches the target sum of 7.
 /// @param  _M7
 /// @return `true` if yes; otherwise `false`.
-////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////
 static inline bool Make7_targetSum(const Make7 *const restrict _M7)
 {
     const uint64_t PLAYER_ALL_BITMASK = _M7->side ^ _M7->mask;
@@ -500,7 +494,7 @@ static inline bool Make7_targetSum(const Make7 *const restrict _M7)
 /////////////////////////////////////////////////////////////
 static inline void Make7_setTargetMethod(void)
 {
-    Make7_targetSum_choice = M7_targetMethod ? Make7_targetSum_slider : Make7_targetSum_exact;
+    Make7_targetSum_choice = M7_targetMethod ? Make7_targetSum_window : Make7_targetSum_exact;
 }
 
 //////////////////////////////////////////////////////
