@@ -340,7 +340,7 @@ static inline void Make7_generate(const Make7 *const restrict _M7, uint8_t _arr[
 /// @param  _P_T2   Bitmap of player tiles of value 2.
 /// @param  _P_T3   Bitmap of player tiles of value 3.
 /// @param  _T_RUN  Bitmask of running tiles.
-/// @param  _DUMMY  Unused parameter (number of tiles in window).
+/// @param  _DUMMY  Unused parameter (shift direction).
 /// @return        `true` if the target is met; otherwise `false`.
 //////////////////////////////////////////////////////////////////////////////
 static inline bool Make7_targetSum_exact(const uint64_t _P_T1, const uint64_t _P_T2, const uint64_t _P_T3, const uint64_t _T_RUN, const uint8_t _DUMMY)
@@ -357,7 +357,6 @@ static inline bool Make7_targetSum_exact(const uint64_t _P_T1, const uint64_t _P
 /// @param  _DUMMY  Unused parameter (tiles of value 3).
 /// @param  _T_RUN  Bitmask of running tiles.
 /// @param  _S_DIR  Adjacent tiles shift direction.
-/// @param  _CNT    Number of tiles in the current window.
 /// @return        `true` if the target is met; otherwise `false`.
 //////////////////////////////////////////////////////////////////////////
 static inline bool Make7_targetSum_window(const uint64_t _P_T1, const uint64_t _P_T2, const uint64_t _DUMMY, const uint64_t _T_RUN, const uint8_t _S_DIR)
