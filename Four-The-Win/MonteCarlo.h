@@ -40,7 +40,7 @@ typedef struct MCTSNode
 {
     struct MCTSNode *restrict ancestor;
     struct MCTSNode *restrict *restrict descendants;
-    Board key; double visits, score;
+    uint64_t key; double visits, score;
     uint8_t move, count, /*nones, index; */ turn;
     MCTSWDL wdl;
 }
@@ -49,7 +49,7 @@ MCTSNode;
 typedef struct MCTSEntry
 {
     struct MCTSEntry *restrict next;
-    Board key;
+    uint64_t key;
     uint8_t exp; // expansion count
     MCTSWDL wdl;
 }
@@ -92,7 +92,7 @@ static bool (*MCTSNode_Connect4_evaluate)(MCTSNode *const restrict, const Connec
 /// @param  _MCT
 /// @param  _KEY
 //////////////////////////////////////////////////////
-static inline uint32_t MCTSTable_index(const MCTSTable *const restrict _MCT, const Board _KEY)
+static inline uint32_t MCTSTable_index(const MCTSTable *const restrict _MCT, const uint64_t _KEY)
 {
     return _KEY % _MCT->size;
 }
@@ -103,7 +103,7 @@ static inline uint32_t MCTSTable_index(const MCTSTable *const restrict _MCT, con
 /// @param  _KEY
 /// @return Pointer to the node, or `nullptr` if not found.
 ////////////////////////////////////////////////////////////
-static inline MCTSEntry *MCTSTable_find(const MCTSTable *const restrict _MCT, const Board _KEY)
+static inline MCTSEntry *MCTSTable_find(const MCTSTable *const restrict _MCT, const uint64_t _KEY)
 {
     for (MCTSEntry *restrict me = _MCT->bucket[MCTSTable_index(_MCT, _KEY)]; me; me = me->next)
     {
@@ -122,7 +122,7 @@ static inline MCTSEntry *MCTSTable_find(const MCTSTable *const restrict _MCT, co
 /// @param  _KEY
 /// @note   Remains constant on trees; changes on graphs.
 //////////////////////////////////////////////////////////
-static inline void MCTSTable_increaseExp(const MCTSTable *const restrict _MCT, const Board _KEY)
+static inline void MCTSTable_increaseExp(const MCTSTable *const restrict _MCT, const uint64_t _KEY)
 {
     MCTSEntry *const restrict me = MCTSTable_find(_MCT, _KEY);
 
@@ -138,7 +138,7 @@ static inline void MCTSTable_increaseExp(const MCTSTable *const restrict _MCT, c
 /// @param  _KEY
 /// @param  _WDL
 /////////////////////////////////////////////////////////////////////
-static inline void MCTSTable_insert(const MCTSTable *const restrict _MCT, const Board _KEY, const MCTSWDL _WDL)
+static inline void MCTSTable_insert(const MCTSTable *const restrict _MCT, const uint64_t _KEY, const MCTSWDL _WDL)
 {
     MCTSEntry *const restrict me = MCTSTable_find(_MCT, _KEY);
 
@@ -162,7 +162,7 @@ static inline void MCTSTable_insert(const MCTSTable *const restrict _MCT, const 
 /// @param  _MCT
 /// @param  _KEY
 /////////////////////////////////////////////////////////////////
-static inline MCTSWDL MCTSTable_WDL(const MCTSTable *const restrict _MCT, const Board _KEY)
+static inline MCTSWDL MCTSTable_WDL(const MCTSTable *const restrict _MCT, const uint64_t _KEY)
 {
     MCTSEntry *const restrict me = MCTSTable_find(_MCT, _KEY);
 
@@ -291,7 +291,7 @@ static inline bool MCTSNode_Make7_evaluate(MCTSNode *const restrict _node, const
         return true;
     }
 
-    if (Make7_noMoreTiles(_M7))
+    if (Make7_noMoreTiles(_M7) || Make7_full(_M7))
     {
         _node->wdl = MCTS_DRAW;
 
@@ -943,7 +943,7 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
     }
 
     {
-        Board rootKey = Connect4_key(_C4);
+        uint64_t rootKey = Connect4_key(_C4);
 
         if (MCTS_POP10)
         {

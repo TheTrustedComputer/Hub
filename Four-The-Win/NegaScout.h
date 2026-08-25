@@ -543,19 +543,17 @@ static inline int16_t NegaScout_Make7_search(const Make7 *const restrict _M7, co
 
     const int16_t OLD_A = _a;
 
-    Make7 scoutM7 = *_M7;
-
     for (uint8_t i = 0; i < movCnt; i++)
     {
         const uint8_t MOV = movArr[i];
+
+        Make7 scoutM7 = *_M7;
 
         Make7_drop(&scoutM7, MOV >> 3, MOV & 7);
 
         i ? (curr = NegaScout_adjustWinLoss(-NegaScout_Make7_search(&scoutM7, _D - 1, -_a - 1, -_a)),
              curr = curr > _a && curr < _B ? NegaScout_adjustWinLoss(-NegaScout_Make7_search(&scoutM7, _D - 1, -_B, -_a)) : curr)
           : (curr = NegaScout_adjustWinLoss(-NegaScout_Make7_search(&scoutM7, _D - 1, -_B, -_a)));
-
-        scoutM7 = *_M7;
 
         if (curr > best)
         {
@@ -1425,14 +1423,15 @@ static inline void NegaScout_Make7_results(const Make7 *const restrict _M7, cons
         }
     }
 
-    const Result M7_BEST = Result_best(m7Res, MAKE7_SIZE_X3);\
+    const Result M7_BEST = Result_best(m7Res, MAKE7_SIZE_X3);
+
+#ifdef FTW_SQLITE
+    SQLite_Make7_insert(database, Make7_partKey(_M7), _M7->tile1, _M7->tile2, M7_targetMethod, &M7_BEST);
+#else
     const uint64_t M7_PKEY = Make7_canonicalize(Make7_partKey(_M7));
     const uint64_t M7_T1_KEY = Make7_canonicalize(_M7->tile1);
     const uint64_t M7_T2_KEY = Make7_canonicalize(_M7->tile2);
 
-#ifdef FTW_SQLITE
-    SQLite_Make7_insert(database, M7_PKEY, M7_T1_KEY, M7_T2_KEY, M7_targetMethod, &M7_BEST);
-#else
     if (ResultRing_query(M7_PKEY, M7_T1_KEY, M7_T2_KEY).wdl == NULL_CHAR)
     {
         ResultRing_insert(M7_PKEY, M7_T1_KEY, M7_T2_KEY, M7_BEST);
