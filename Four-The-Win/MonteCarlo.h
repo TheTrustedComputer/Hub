@@ -41,7 +41,7 @@ typedef struct MCTSNode
     struct MCTSNode *restrict ancestor;
     struct MCTSNode *restrict *restrict descendants;
     Board key; double visits, score;
-    uint8_t move, count, nones, index;
+    uint8_t move, count, /*nones, index; */ turn;
     MCTSWDL wdl;
 }
 MCTSNode;
@@ -74,6 +74,8 @@ MCTSResult;
 
 #pragma pack(pop)
 
+// static constexpr double MCTS_C = 1.4142135623730950488;
+
 static MemoryPool MCTS_nodePool, MCTS_entryPool;
 static unsigned long long MCTS_trials;
 static MCTSTable MCTS_table;
@@ -82,8 +84,8 @@ static uint8_t *restrict MCTS_movArr, MCTS_termCnt;
 static atomic_bool MCTS_run;
 
 static bool (*MCTSNode_Connect4_evaluate)(MCTSNode *const restrict, const Connect4 *const restrict);
-static double (*MCTSNode_Connect4_simulate)(Connect4 *const restrict);
-static void (*MCTSResult_print)(const MCTSResult *const restrict);
+//static double (*MCTSNode_Connect4_simulate)(Connect4 *const restrict);
+//static void (*MCTSResult_print)(const MCTSResult *const restrict);
 
 //////////////////////////////////////////////////////
 /// @brief  Returns the index of a node in the table.
@@ -258,6 +260,47 @@ static inline bool MCTSNode_Connect4_popout_evaluate(MCTSNode *const restrict _n
     return false;
 }
 
+///////////////////////////////////////////////////////////////
+/// @brief  Evaluates a Connect 4 Pop 10 node for termination.
+/// @param  _node
+/// @param  _C4
+///////////////////////////////////////////////////////////////
+static inline bool MCTSNode_Connect4_pop10_evaluate(MCTSNode *const restrict _node, const Connect4_Pop10 *const restrict _P10)
+{
+    if (Connect4_pop10_over(_P10))
+    {
+        _node->wdl = MCTS_WIN;
+
+        return true;
+    }
+
+    return false;
+}
+
+////////////////////////////////////////////////////////
+/// @brief  Evaluation function for a Make 7 MCTS node.
+/// @param  _node
+/// @param  _M7
+////////////////////////////////////////////////////////
+static inline bool MCTSNode_Make7_evaluate(MCTSNode *const restrict _node, const Make7 *const restrict _M7)
+{
+    if (Make7_targetSum(_M7))
+    {
+        _node->wdl = MCTS_LOSS;
+
+        return true;
+    }
+
+    if (Make7_noMoreTiles(_M7))
+    {
+        _node->wdl = MCTS_DRAW;
+
+        return true;
+    }
+
+    return false;
+}
+
 /////////////////////////////////////////////////////////////
 /// @brief  Calculates the Upper Confidence Bound of a node.
 /// @param  _NODE
@@ -269,19 +312,19 @@ static inline double MCTSNode_UCB1(const MCTSNode *const restrict _NODE)
 
 ///////////////////////////////////////////////////////////////
 /// @brief          Initializes a node with meaningful values.
-/// @param _node    Unaliased pointer to the node.
-/// @param _ancest  Unaliased pointer to the ancestor.
-/// @param _INDEX   Index from the ancestor node.
-/// @param _MOVE    A move that led to this node.
+/// @param  _node   Unaliased pointer to the node.
+/// @param  _ancest Unaliased pointer to the ancestor.
+/// @param  _INDEX  Index from the ancestor node.
+/// @param  _MOVE   A move that led to this node.
 ///////////////////////////////////////////////////////////////
-static inline void MCTSNode_init(MCTSNode *const restrict _node, MCTSNode *const restrict _ancest, const uint8_t _INDEX, const uint8_t _MOVE)
+static inline void MCTSNode_init(MCTSNode *const restrict _node, MCTSNode *const restrict _ancest, const uint8_t _TURN /*_INDEX*/, const uint8_t _MOVE)
 {
     _node->ancestor = _ancest;
-    _node->index = _INDEX;
+    _node->turn = _TURN; // _node->index = _INDEX;
     _node->move = _MOVE;
     _node->descendants = nullptr;
     _node->visits = _node->score = 0.0;
-    _node->count = _node->nones = 0;
+    _node->count = /*_node->nones =*/ 0;
     _node->wdl = MCTS_NONE;
 }
 
@@ -323,7 +366,7 @@ static inline void MCTSNode_prune(MCTSNode *const restrict _node)
 /// @param  _ancest
 /// @param  _descend
 //////////////////////////////////////////////////////////////////////
-static inline void MCTSNode_swap(MCTSNode *const restrict _ancest, MCTSNode *const restrict _descend)
+/*static inline void MCTSNode_swap(MCTSNode *const restrict _ancest, MCTSNode *const restrict _descend)
 {
     const uint8_t INDEX = _descend->index;
     const uint8_t LAST = --_ancest->nones;
@@ -337,31 +380,46 @@ static inline void MCTSNode_swap(MCTSNode *const restrict _ancest, MCTSNode *con
         swapper->index = INDEX;
         _descend->index = LAST;
     }
-}
+}*/
 
-//////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////
 /// @brief  Proves a node's WDL outcome from its descendants.
 /// @param  _node
 /// @return `true` if proved; otherwise `false`.
-//////////////////////////////////////////////////////////////
+/// @note   Derived from OR-node logic from Proof-Number Search.
+/////////////////////////////////////////////////////////////////
 static inline bool MCTSNode_prove(MCTSNode *const restrict _node)
 {
-    uint8_t wins = 0, nones = 0;
-    bool draws = false;
+    uint8_t losses = 0, nones = 0;
+    bool draw = false;
 
     for (uint8_t i = 0; i < _node->count; i++)
     {
-        switch (_node->descendants[i]->wdl)
+        const MCTSNode *const restrict child = _node->descendants[i];
+        const bool SAME_TURN = child->turn == _node->turn;
+
+        switch (child->wdl)
         {
         case MCTS_LOSS:
-            _node->wdl = MCTS_WIN;
-            MCTSNode_prune(_node);
-            return true;
+            if (!SAME_TURN)
+            {
+                _node->wdl = MCTS_WIN;
+                MCTSNode_prune(_node);
+                return true;
+            }
+            losses++;
+            break;
         case MCTS_DRAW:
-            draws = true;
+            draw = true;
             break;
         case MCTS_WIN:
-            wins++;
+            if (SAME_TURN)
+            {
+                _node->wdl = MCTS_WIN;
+                MCTSNode_prune(_node);
+                return true;
+            }
+            losses++;
             break;
         default:
             nones++;
@@ -371,13 +429,13 @@ static inline bool MCTSNode_prove(MCTSNode *const restrict _node)
 
     if (!nones)
     {
-        if (draws)
+        if (draw)
         {
             _node->wdl = MCTS_DRAW;
             MCTSNode_prune(_node);
             return true;
         }
-        else if (wins && wins == _node->count)
+        else if (losses && losses == _node->count)
         {
             _node->wdl = MCTS_LOSS;
             MCTSNode_prune(_node);
@@ -394,32 +452,67 @@ static inline bool MCTSNode_prove(MCTSNode *const restrict _node)
 /// @param _c4   Unaliased pointer to the game state.
 /// @return      Highest UCB1 descendant.
 //////////////////////////////////////////////////////
-static inline MCTSNode *MCTSNode_Connect4_select(MCTSNode *restrict _node, Connect4 *const restrict _c4)
+static inline MCTSNode *MCTSNode_Connect4_select(MCTSNode *restrict _node, Connect4 *const restrict _c4, Connect4_Pop10 *const restrict _p10)
 {
     while (_node->descendants)
     {
         MCTSNode *restrict selected = nullptr;
         double currUCB1, bestUCB1 = -DBL_MAX;
 
-        for (uint8_t i = 0; i < _node->nones; i++)
+        for (uint8_t i = 0; i < _node->count /*_node->nones*/; i++)
         {
-            MCTSNode *restrict candidate = _node->descendants[i];
+            MCTSNode *const restrict candidate = _node->descendants[i];
 
             if (!candidate->visits)
             {
                 return _node;
             }
 
-            if ((currUCB1 = MCTSNode_UCB1(candidate)) > bestUCB1)
+            if (candidate->wdl == MCTS_NONE && (currUCB1 = MCTSNode_UCB1(candidate)) > bestUCB1)
             {
                 bestUCB1 = currUCB1;
                 selected = candidate;
             }
         }
 
-        assert(selected); // TODO: Support PopOut
+        // TODO: Support PopOut/Pop 10 (swap + nones optimization)
+        C4_variant == CONNECT4_POP10 ? Connect4_pop10_play(_c4, _p10, selected->move) : Connect4_play(_c4, selected->move);
 
-        Connect4_play(_c4, selected->move);
+        _node = selected;
+    }
+
+    return _node;
+}
+
+/////////////////////////////////////////////////////////////////////////////////
+/// @brief  Selects a Make 7 node with the highest upper confidence bound score.
+/// @param  _node
+/// @param  _m7
+/////////////////////////////////////////////////////////////////////////////////
+static inline MCTSNode *MCTSNode_Make7_select(MCTSNode *restrict _node, Make7 *const restrict _m7)
+{
+    while (_node->descendants)
+    {
+        MCTSNode *restrict selected = nullptr;
+        double currUCB1, bestUCB1 = -DBL_MAX;
+
+        for (uint8_t i = 0; i < _node->count; i++)
+        {
+            MCTSNode *const restrict candidate = _node->descendants[i];
+
+            if (!candidate->visits)
+            {
+                return _node;
+            }
+
+            if (candidate->wdl == MCTS_NONE && (currUCB1 = MCTSNode_UCB1(candidate)) > bestUCB1)
+            {
+                bestUCB1 = currUCB1;
+                selected = candidate;
+            }
+        }
+
+        Make7_drop(_m7, selected->move >> 3, selected->move & 7);
 
         _node = selected;
     }
@@ -433,34 +526,81 @@ static inline MCTSNode *MCTSNode_Connect4_select(MCTSNode *restrict _node, Conne
 /// @param _c4   Unaliased pointer to the game state.
 /// @return      A randomly picked descendant node.
 //////////////////////////////////////////////////////
-static inline MCTSNode *MCTSNode_Connect4_expand(MCTSNode *restrict _node, Connect4 *const restrict _c4)
+static inline MCTSNode *MCTSNode_Connect4_expand(MCTSNode *const restrict _node, Connect4 *const restrict _c4, Connect4_Pop10 *const restrict _p10)
 {
     if (!_node->descendants)
     {
-        Connect4_generate(_c4, MCTS_movArr, &_node->count);
+        const bool MCTS_POP10 = C4_variant == CONNECT4_POP10;
+
+        MCTS_POP10 ? Connect4_pop10_generate(_c4, _p10, MCTS_movArr, &_node->count) : Connect4_generate(_c4, MCTS_movArr, &_node->count);
 
         _node->descendants = MemoryPool_alloc(&MCTS_nodePool, sizeof(*_node->descendants) * _node->count);
         MCTS_termCnt = 0;
 
         for (uint8_t i = 0; i < _node->count; i++)
         {
-            _node->nones++;
+            //_node->nones++;
 
-            MCTSNode *restrict *restrict newNode = &_node->descendants[i];
+            MCTSNode *restrict *const restrict newNode = &_node->descendants[i];
 
             *newNode = MemoryPool_alloc(&MCTS_nodePool, sizeof(**newNode));
             MCTSNode_init(*newNode, _node, i, MCTS_movArr[i]);
-            Connect4_play(_c4, (*newNode)->move);
-            (*newNode)->key = Connect4_key(_c4);
+            MCTS_POP10 ? Connect4_pop10_play(_c4, _p10, (*newNode)->move) : Connect4_play(_c4, (*newNode)->move);
+            (*newNode)->key = Connect4_key(_c4) | (MCTS_POP10 * Connect4_pop10_key(_p10));
+            (*newNode)->turn = MCTS_POP10 ? _p10->turn : !_node->turn;
 
-            if (MCTSNode_Connect4_evaluate(*newNode, _c4))
+            if (MCTS_POP10 ? MCTSNode_Connect4_pop10_evaluate(*newNode, _p10) : MCTSNode_Connect4_evaluate(*newNode, _c4))
             {
                 MCTS_termNodes[MCTS_termCnt++] = *newNode;
-                MCTSNode_swap(_node, *newNode);
+                //MCTSNode_swap(_node, *newNode);
                 MCTSTable_insert(&MCTS_table, (*newNode)->key, (*newNode)->wdl);
             }
 
-            Connect4_unplay(_c4);
+            MCTS_POP10 ? Connect4_pop10_unplay(_c4, _p10) : Connect4_unplay(_c4);
+        }
+
+        MCTSNode *const restrict tNode = MCTS_termCnt ? MCTS_termNodes[Xoshiro128pp_nextN(&g_rng, MCTS_termCnt)] : nullptr;
+
+        if (tNode && tNode->wdl == (MCTS_POP10 ? MCTS_WIN : MCTS_LOSS))
+        {
+            return tNode;
+        }
+    }
+
+    return _node->descendants[Xoshiro128pp_nextN(&g_rng, _node->count)];
+}
+
+/////////////////////////////////////////////////////////////////////////
+/// @brief  Expands all moves of a Make 7 node and selects a random one.
+/// @param  _node
+/// @param  _m7
+/////////////////////////////////////////////////////////////////////////
+static inline MCTSNode *MCTSNode_Make7_expand(MCTSNode *const restrict _node, const Make7 *const restrict _M7)
+{
+    if (!_node->descendants)
+    {
+        Make7_generate(_M7, MCTS_movArr, &_node->count);
+
+        _node->descendants = MemoryPool_alloc(&MCTS_nodePool, sizeof(*_node->descendants) * _node->count);
+        MCTS_termCnt = 0;
+
+        for (uint8_t i = 0; i < _node->count; i++)
+        {
+            MCTSNode *restrict *const restrict newNode = &_node->descendants[i];
+
+            *newNode = MemoryPool_alloc(&MCTS_nodePool, sizeof(**newNode));
+            MCTSNode_init(*newNode, _node, !_node->turn, MCTS_movArr[i]);
+
+            Make7 expM7 = *_M7;
+
+            Make7_drop(&expM7, (*newNode)->move >> 3, (*newNode)->move & 7);
+            (*newNode)->key = Make7_lock(&expM7);
+
+            if (MCTSNode_Make7_evaluate(*newNode, &expM7))
+            {
+                MCTS_termNodes[MCTS_termCnt++] = *newNode;
+                MCTSTable_insert(&MCTS_table, (*newNode)->key, (*newNode)->wdl);
+            }
         }
 
         MCTSNode *const restrict tNode = MCTS_termCnt ? MCTS_termNodes[Xoshiro128pp_nextN(&g_rng, MCTS_termCnt)] : nullptr;
@@ -477,30 +617,34 @@ static inline MCTSNode *MCTSNode_Connect4_expand(MCTSNode *restrict _node, Conne
 /////////////////////////////////////////////////////////
 /// @brief  MCTS simulation/rollout phase for Connect 4.
 /// @param  _c4
+/// @param  _p10
 /// @return A reward for the player who initiated it.
 /////////////////////////////////////////////////////////
-static inline double MCTSNode_Connect4_original_simulate(Connect4 *const restrict _c4)
+static inline double MCTSNode_Connect4_simulate(Connect4 *const restrict _c4, Connect4_Pop10 *const restrict _p10)
 {
-    const bool SIM_TURN = _c4->plies & 1;
+    const bool SIM_POP10 = C4_variant == CONNECT4_POP10;
+    const bool SIM_TURN = SIM_POP10 ? _p10->turn : _c4->plies & 1;
 
     uint8_t simCnt; MCTSWDL simWDL;
 
     for (;;)
     {
-        if ((simWDL = MCTSTable_WDL(&MCTS_table, Connect4_key(_c4))) != MCTS_NONE)
+        if ((simWDL = MCTSTable_WDL(&MCTS_table, Connect4_key(_c4) | (SIM_POP10 * Connect4_pop10_key(_p10)))) != MCTS_NONE)
         {
             const double SCORE = simWDL == MCTS_WIN ? 2.0 : simWDL == MCTS_LOSS ? -2.0 : 0.0;
 
-            return SIM_TURN == (_c4->plies & 1) ? -SCORE : SCORE;
+            return SIM_TURN == (SIM_POP10 ? _p10->turn : (_c4->plies & 1)) ? -SCORE : SCORE;
         }
 
-        Connect4_generate(_c4, MCTS_movArr, &simCnt);
+        SIM_POP10 ? Connect4_pop10_generate(_c4, _p10, MCTS_movArr, &simCnt) : Connect4_generate(_c4, MCTS_movArr, &simCnt);
 
-        if (simCnt)
+        if (simCnt && _c4->plies < UINT16_MAX)
         {
-            Connect4_play(_c4, MCTS_movArr[Xoshiro128pp_nextN(&g_rng, simCnt)]);
+            const uint8_t SIM_MOVE = MCTS_movArr[Xoshiro128pp_nextN(&g_rng, simCnt)];
 
-            if (Connect4_fourInARow(_c4->side ^ _c4->mask))
+            SIM_POP10 ? Connect4_pop10_play(_c4, _p10, SIM_MOVE) : Connect4_play(_c4, SIM_MOVE);
+
+            if (SIM_POP10 ? Connect4_pop10_over(_p10) : Connect4_fourInARow(_c4->side ^ _c4->mask))
             {
                 switch (C4_variant)
                 {
@@ -508,7 +652,50 @@ static inline double MCTSNode_Connect4_original_simulate(Connect4 *const restric
                     return SIM_TURN == (_c4->plies & 1) ? 1.0 : -1.0;
                 case CONNECT4_MISERE:
                     return SIM_TURN == (_c4->plies & 1) ? -1.0 : 1.0;
+                case CONNECT4_POP10:
+                    return SIM_TURN == _p10->turn ? 1.0 : -1.0;
                 }
+            }
+        }
+        else
+        {
+            return 0.0;
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////
+/// @brief  Simulates a Make 7 game and rewards the player who started it.
+/// @param  _m7
+///////////////////////////////////////////////////////////////////////////
+static inline double MCTSNode_Make7_simulate(Make7 *const restrict _m7)
+{
+    const bool SIM_TURN = Make7_moves(_m7) & 1;
+
+    uint8_t simCnt; MCTSWDL simWDL; bool playTurn = SIM_TURN;
+
+    for (;;)
+    {
+        if ((simWDL = MCTSTable_WDL(&MCTS_table, Make7_lock(_m7))) != MCTS_NONE)
+        {
+            const double SCORE = simWDL == MCTS_WIN ? 2.0 : simWDL == MCTS_LOSS ? -2.0 : 0.0;
+
+            return SIM_TURN == playTurn ? -SCORE : SCORE;
+        }
+
+        Make7_generate(_m7, MCTS_movArr, &simCnt);
+
+        if (simCnt)
+        {
+            const uint8_t SIM_MOVE = MCTS_movArr[Xoshiro128pp_nextN(&g_rng, simCnt)];
+
+            Make7_drop(_m7, SIM_MOVE >> 3, SIM_MOVE & 7);
+
+            playTurn = !playTurn;
+
+            if (Make7_targetSum(_m7))
+            {
+                return SIM_TURN == playTurn ? 1.0 : -1.0;
             }
         }
         else
@@ -520,8 +707,8 @@ static inline double MCTSNode_Connect4_original_simulate(Connect4 *const restric
 
 ///////////////////////////////////////////////////////////////////
 /// @brief          Monte Carlo Tree Search backpropagation phase.
-/// @param _node    Leaf node.
-/// @param _score   Simulation score.
+/// @param  _node   Leaf node.
+/// @param  _score  Playout score.
 ///////////////////////////////////////////////////////////////////
 static inline void MCTSNode_backpropagate(MCTSNode *restrict _node, double _score)
 {
@@ -532,13 +719,17 @@ static inline void MCTSNode_backpropagate(MCTSNode *restrict _node, double _scor
 
         MCTSNode *const restrict parent = _node->ancestor;
 
-        if (MCTSNode_prove(_node) && parent)
+        if (MCTSNode_prove(_node) /*&& parent*/)
         {
             MCTSTable_insert(&MCTS_table, _node->key, _node->wdl);
-            MCTSNode_swap(parent, _node);
+            //MCTSNode_swap(parent, _node);
         }
 
-        _score = -_score;
+        if (parent && parent->turn != _node->turn)
+        {
+            _score = -_score;
+        }
+
         _node = parent;
     }
 }
@@ -619,27 +810,38 @@ static inline MCTSNode *MCTSNode_mostRobust(MCTSNode *const restrict _node)
 /// @brief  Prints the running status of Monte Carlo Tree Search on Connect 4.
 /// @param  _RES
 ///////////////////////////////////////////////////////////////////////////////
-static inline void MCTSResult_Connect4_print(const MCTSResult *const restrict _RES)
+static inline void MCTSResult_print(const MCTSResult *const restrict _RES)
 {
-    const unsigned long long SPEED = *_RES->trials / *_RES->secs;
+    const unsigned long long M_SPEED = *_RES->trials / *_RES->secs;
+    const bool M_MAKE7 = C4_variant == CONNECT4_MAKE7;
+    const uint8_t M_MOVE = _RES->move; char mChar;
 
-    uint8_t move = _RES->move;
+    if (!M_MAKE7)
+    {
+        mChar = M_MOVE + (COLS < 10 ? '1' : 'A');
 
-    const char M_CHAR = move + '1';
+        if (M_MOVE >= COLS)
+        {
+            mChar = M_MOVE + (COLS < 10 ? 'A' : 'a') - COLS;
+        }
+    }
+
+    const char M_NOTE_A = M_MAKE7 ? (_RES->move >> 3) + '1' : mChar;
+    const char M_NOTE_B = M_MAKE7 * ((_RES->move & 7) + 'A');
 
     switch (*_RES->wdl)
     {
     case MCTS_WIN:
-        printf("\r\e[1;92m%c %s\e[0m %llu %llu %llu        ", M_CHAR, FTW_STR_WIN, *_RES->trials, SPEED, *_RES->secs);
+        printf("\r\e[1;92m%c%c %s\e[0m %llu %llu %llu        ", M_NOTE_A, M_NOTE_B, FTW_STR_WIN, *_RES->trials, M_SPEED, *_RES->secs);
         break;
     case MCTS_DRAW:
-        printf("\r\e[1;93m%c %s\e[0m %llu %llu %llu        ", M_CHAR, FTW_STR_DRAW, *_RES->trials, SPEED, *_RES->secs);
+        printf("\r\e[1;93m%c%c %s\e[0m %llu %llu %llu        ", M_NOTE_A, M_NOTE_B, FTW_STR_DRAW, *_RES->trials, M_SPEED, *_RES->secs);
         break;
     case MCTS_LOSS:
-        printf("\r\e[1;91m%c %s\e[0m %llu %llu %llu        ", M_CHAR, FTW_STR_LOSS, *_RES->trials, SPEED, *_RES->secs);
+        printf("\r\e[1;91m%c%c %s\e[0m %llu %llu %llu        ", M_NOTE_A, M_NOTE_B, FTW_STR_LOSS, *_RES->trials, M_SPEED, *_RES->secs);
         break;
     default:
-        printf("\r\e[1m%c\e[0m %.3f %llu %llu %llu ", M_CHAR, _RES->reward, *_RES->trials, SPEED, *_RES->secs);
+        printf("\r\e[1m%c%c\e[0m %.3f %llu %llu %llu ", M_NOTE_A, M_NOTE_B, _RES->reward, *_RES->trials, M_SPEED, *_RES->secs);
         fflush(stdout);
         break;
     }
@@ -652,7 +854,7 @@ static inline void MCTSResult_Connect4_print(const MCTSResult *const restrict _R
 /////////////////////////////////////////////////////////////
 static inline int MCTSResult_thread(void *const restrict _arg)
 {
-    const struct timespec _1_SEC = {.tv_sec = 1, .tv_nsec = 0};
+    constexpr struct timespec _1_SEC = { .tv_sec = 1, .tv_nsec = 0 };
 
     MCTSResult *const restrict res = _arg;
 
@@ -681,8 +883,8 @@ static inline int MCTSResult_thread(void *const restrict _arg)
 static inline void MCTS_funtPtrs_init(void)
 {
     MCTSNode_Connect4_evaluate = MCTSNode_Connect4_original_evaluate;
-    MCTSNode_Connect4_simulate = MCTSNode_Connect4_original_simulate;
-    MCTSResult_print = MCTSResult_Connect4_print;
+    //MCTSNode_Connect4_simulate = MCTSNode_Connect4_original_simulate;
+    //MCTSResult_print = MCTSResult_Connect4_print;
 
     switch (C4_variant)
     {
@@ -707,17 +909,53 @@ static inline void MCTS_stopSearch(const int _UNUSED)
     atomic_store_explicit(&MCTS_run, false, memory_order_relaxed);
 }
 
-/////////////////////////////////////////////////////////////
-/// @brief  Begins a Monte Carlo Tree Search on Connect 4.
+////////////////////////////////////////////////////////////////////
+/// @brief  Begins a Monte Carlo Tree Search on Connect 4 / Make 7.
 /// @param  _C4
+/// @param  _P10
+/// @param  _M7
 /// @return Game outcome (`WIN`, `DRAW`, `LOSS`, or `NONE`).
-/////////////////////////////////////////////////////////////
-static inline MCTSWDL MCTS_Connect4_search(const Connect4 *const restrict _C4)
+////////////////////////////////////////////////////////////////////
+static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, const Connect4_Pop10 *const restrict _P10, const Make7 *const restrict _M7)
 {
-    MCTSNode root;
-    MCTSNode_init(&root, nullptr, 0, 0);
+    const bool MCTS_POP10 = C4_variant == CONNECT4_POP10;
+    const bool MCTS_MAKE7 = C4_variant == CONNECT4_MAKE7;
 
-    root.key = Connect4_key(_C4);
+    MCTSNode rootNode;
+
+    {
+        uint8_t rootTurn;
+
+        if (MCTS_POP10)
+        {
+            rootTurn = _P10->turn;
+        }
+        else if (MCTS_MAKE7)
+        {
+            rootTurn = Make7_moves(_M7) & 1;
+        }
+        else
+        {
+            rootTurn = _C4->plies & 1;
+        }
+
+        MCTSNode_init(&rootNode, nullptr, rootTurn, 0);
+    }
+
+    {
+        Board rootKey = Connect4_key(_C4);
+
+        if (MCTS_POP10)
+        {
+            rootKey |= Connect4_pop10_key(_P10);
+        }
+        else if (MCTS_MAKE7)
+        {
+            rootKey = Make7_lock(_M7);
+        }
+
+        rootNode.key = rootKey;
+    }
 
     MCTSTable_init(&MCTS_table, NS_table.size);
     MemoryPool_init(&MCTS_nodePool);
@@ -729,23 +967,40 @@ static inline MCTSWDL MCTS_Connect4_search(const Connect4 *const restrict _C4)
     MCTS_movArr = REC_calloc(MOVE_SPACE, sizeof(*MCTS_movArr), "Could not allocate memory for the MCTS move array.", true);
 
     Connect4 mctsC4;
-    unsigned long long secs;
+    Connect4_Pop10 mctsP10 = *_P10;
+
     Connect4_clone(_C4, &mctsC4);
 
-    MCTSResult result = (MCTSResult){
-        .root = &root,
-        .wdl = &root.wdl,
+    Make7 mctsM7 = *_M7;
+
+    unsigned long long secs;
+
+    MCTSResult result = (MCTSResult)
+    {
+        .root = &rootNode,
+        .wdl = &rootNode.wdl,
         .trials = &MCTS_trials,
-        .secs = &secs};
+        .secs = &secs
+    };
 
     thrd_t progThrd;
+
     REC_thrd_create(&progThrd, MCTSResult_thread, &result, "Could not create the MCTS progress thread.", true);
 
-    for (MCTS_trials = secs = 0; atomic_load_explicit(&MCTS_run, memory_order_relaxed) && root.wdl == MCTS_NONE; MCTS_trials++)
+    for (MCTS_trials = secs = 0; atomic_load_explicit(&MCTS_run, memory_order_relaxed) && rootNode.wdl == MCTS_NONE; MCTS_trials++)
     {
-        MCTSNode *const restrict leaf = MCTSNode_Connect4_expand(MCTSNode_Connect4_select(&root, &mctsC4), &mctsC4);
+        MCTSNode *restrict leaf;
 
-        Connect4_play(&mctsC4, leaf->move);
+        if (MCTS_MAKE7)
+        {
+            leaf = MCTSNode_Make7_expand(MCTSNode_Make7_select(&rootNode, &mctsM7), &mctsM7);
+            Make7_drop(&mctsM7, leaf->move >> 3, leaf->move & 7);
+        }
+        else
+        {
+            leaf = MCTSNode_Connect4_expand(MCTSNode_Connect4_select(&rootNode, &mctsC4, &mctsP10), &mctsC4, &mctsP10);
+            MCTS_POP10 ? Connect4_pop10_play(&mctsC4, &mctsP10, leaf->move) : Connect4_play(&mctsC4, leaf->move);
+        }
 
         double reward;
 
@@ -761,17 +1016,26 @@ static inline MCTSWDL MCTS_Connect4_search(const Connect4 *const restrict _C4)
             reward = 0.0;
             break;
         default:
-            reward = MCTSNode_Connect4_simulate(&mctsC4);
+            reward = MCTS_MAKE7 ? MCTSNode_Make7_simulate(&mctsM7) : MCTSNode_Connect4_simulate(&mctsC4, &mctsP10);
             break;
         }
 
         MCTSNode_backpropagate(leaf, reward);
-        Connect4_copy(_C4, &mctsC4);
+
+        if (MCTS_MAKE7)
+        {
+            mctsM7 = *_M7;
+        }
+        else
+        {
+            Connect4_copy(_C4, &mctsC4);
+            mctsP10 = *_P10;
+        }
     }
 
     secs = !secs ? 1 : secs;
 
-    const MCTSNode *const restrict bestNode = MCTSNode_mostRobust(&root);
+    const MCTSNode *const restrict bestNode = MCTSNode_mostRobust(&rootNode);
 
     result.move = bestNode->move;
     *result.wdl != MCTS_NONE ? MCTSResult_print(&result) : FTW_VOID_NOP;
@@ -779,7 +1043,7 @@ static inline MCTSWDL MCTS_Connect4_search(const Connect4 *const restrict _C4)
 
     atomic_store_explicit(&MCTS_run, false, memory_order_relaxed);
     REC_thrd_join(progThrd, nullptr, "Could not join the MCTS progress thread.", true);
-    MCTSNode_destroy(&root);
+    MCTSNode_destroy(&rootNode);
     MCTSTable_destroy(&MCTS_table);
     MemoryPool_destroy(&MCTS_nodePool);
     MemoryPool_destroy(&MCTS_entryPool);
@@ -788,7 +1052,7 @@ static inline MCTSWDL MCTS_Connect4_search(const Connect4 *const restrict _C4)
     REC_free(MCTS_movArr);
     signal(SIGINT, SIG_DFL);
 
-    return root.wdl;
+    return rootNode.wdl;
 }
 
 #endif // MONTECARLO_H //

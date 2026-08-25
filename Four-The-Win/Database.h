@@ -328,20 +328,13 @@ static inline bool SQLite_Make7_insert(sqlite3 *const restrict _db, const uint64
 
     SQLite_check(sqlite3_prepare_v2(_db, "REPLACE INTO s (k0, k1, k2, m, r) VALUES (?, ?, ?, ?, ?);", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare an insertion statement for Make 7 -- %s.\e[0m\n");
 
-    uint8_t resBytes = 0;
-
-    memset(resBlob, 0, sizeof(*resBlob) * 2);
-
-    for (uint16_t blob = Result_toScalar(_RES); blob; blob >>= 8)
-    {
-        resBlob[resBytes++] = blob;
-    }
+    resBlob[0] = Result_toScalar(_RES);
 
     sqlite3_bind_int64(stmt, 1, Make7_canonicalize(_K0));
     sqlite3_bind_int64(stmt, 2, Make7_canonicalize(_K1));
     sqlite3_bind_int64(stmt, 3, Make7_canonicalize(_K2));
     sqlite3_bind_int(stmt, 4, _WM);
-    sqlite3_bind_blob(stmt, 5, resBlob, resBytes, SQLITE_STATIC);
+    sqlite3_bind_blob(stmt, 5, resBlob, 1, SQLITE_STATIC);
 
     if (sqlite3_step(stmt) != SQLITE_DONE)
     {

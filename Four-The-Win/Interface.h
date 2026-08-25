@@ -807,6 +807,8 @@ static inline void Interface_run(void)
                 if (UI_IS_MAKE7)
                 {
                     m7Key = Make7_partKey(&UI_m7);
+                    t1Key = UI_m7.tile1;
+                    t2Key = UI_m7.tile2;
                 }
                 else
                 {
@@ -823,7 +825,7 @@ static inline void Interface_run(void)
                     dbQuery = SQLite_Connect4_pop10_query(database, c4Key, ptKey, &result);
                     break;
                 case CONNECT4_MAKE7:
-                    dbQuery = SQLite_Make7_query(database, m7Key, UI_m7.tile1, UI_m7.tile2, M7_targetMethod, &result);
+                    dbQuery = SQLite_Make7_query(database, m7Key, t1Key, t2Key, M7_targetMethod, &result);
                     break;
                 }
 
@@ -885,9 +887,9 @@ static inline void Interface_run(void)
         }
         else if (Interface_findShortCmd(cmd, 't', "mcts"))
         {
-            if (winner == -1) // TODO: add MCTS for Make 7
+            if (winner == -1)
             {
-                UI_IS_MAKE7 ? puts("Under construction.") : MCTS_Connect4_search(&UI_c4);
+                MonteCarloTreeSearch(&UI_c4, &UI_p10, &UI_m7);
             }
         }
         else if (UI_IS_CYLINDER && Interface_findLongCmd(cmd, "<"))

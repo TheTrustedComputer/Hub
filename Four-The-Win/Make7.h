@@ -589,7 +589,7 @@ static inline uint64_t Make7_partKey(const Make7 *const restrict _M7)
 ///////////////////////////////////////////////////////////
 static inline uint64_t Make7_lock(const Make7 *const restrict _M7)
 {
-    const uint64_t LOCK_A = SplitMix64_finalize(_M7->side + _M7->mask + MAKE7_SM_SALT);
+    const uint64_t LOCK_A = SplitMix64_finalize(Make7_partKey(_M7) + MAKE7_SM_SALT);
     const uint64_t LOCK_B = SplitMix64_finalize(_M7->tile1 + MAKE7_T1_SALT);
     const uint64_t LOCK_C = SplitMix64_finalize(_M7->tile2 + MAKE7_T2_SALT);
 

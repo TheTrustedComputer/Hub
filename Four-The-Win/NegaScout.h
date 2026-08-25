@@ -415,8 +415,8 @@ static inline int16_t NegaScout_Connect4_pop10_search(Connect4 *const restrict _
         return -NS_PROG;
     }
 
-    const uint64_t KEY = Connect4_key(_c4);
-    const uint64_t MIX = SplitMix64_finalize(_c4->plies | ((_p10->phase + _p10->turn + _p10->pops) << 16));
+    const uint64_t KEY = Connect4_key(_c4) | Connect4_pop10_key(_p10);
+    const uint64_t MIX = SplitMix64_finalize(_c4->plies);
     const uint64_t LOCK = KEY ^ MIX;
 
     int16_t ttVal; uint8_t ttMov;
@@ -428,13 +428,11 @@ static inline int16_t NegaScout_Connect4_pop10_search(Connect4 *const restrict _
         return ttVal;
     }
 
-    const Board PT_KEY = KEY | Connect4_pop10_key(_p10);
+    PathEntry *const restrict pe = PathTable_probe(&NS_path, KEY);
 
-    PathEntry *const restrict pe = PathTable_probe(&NS_path, PT_KEY);
+    pe->key = KEY;
 
-    pe->key = PT_KEY;
-
-    if (PathEntry_backedge(pe, PT_KEY))
+    if (PathEntry_backedge(pe, KEY))
     {
         PathGraph_addEdge(&NS_graph, &NS_path, pe, NS_stack.data[NS_stack.top], MIX);
 
@@ -442,7 +440,7 @@ static inline int16_t NegaScout_Connect4_pop10_search(Connect4 *const restrict _
     }
 
     PathEntry_push(pe);
-    PathStack_push(&NS_stack, PT_KEY);
+    PathStack_push(&NS_stack, KEY);
 
     int16_t curr, best = -NS_WIN_VAL;
     uint8_t movArr[MOVE_BOUNDS], movCnt, move = UINT8_MAX;
@@ -657,7 +655,7 @@ static inline Result NegaScout_Connect4_popout_iterative(Connect4 *const restric
 
         const uint64_t DELTA = NS_nodes - nodePrev;
 
-        if (!val && DELTA == nodeDelta)
+        if (val == NS_DRAW && DELTA == nodeDelta)
         {
             goto NegaScout_Connect4_popout_iterative_solved;
         }
@@ -1602,7 +1600,7 @@ static inline void NegaScout_Make7_PGO(void)
     printf(FTW_STR_PGO_START, FTW_STR_MAKE7, "");
     FourTheWin_monoTime(&profStart);
 
-    constexpr uint8_t TOTAL_ROUNDS = 200;
+    constexpr uint8_t TOTAL_ROUNDS = 250;
     constexpr uint8_t HALF_ROUNDS = TOTAL_ROUNDS / 2;
 
     M7_targetMethod = true;
