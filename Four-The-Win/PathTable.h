@@ -6,10 +6,8 @@
  *  Full cycle handling is not possible with pure trees; graph algorithms are required.
  */
 
-#ifndef EDGETABLE_H
-#define EDGETABLE_H
-
-#pragma pack(push, 1)
+#ifndef PATHTABLE_H
+#define PATHTABLE_H
 
 typedef struct
 {
@@ -58,8 +56,6 @@ typedef struct
     uint16_t top, next;
 }
 PathTarjan;
-
-#pragma pack(pop)
 
 #ifdef FTW_LIBDIVIDE
 #ifdef FTW_BRANCHLESS
@@ -459,4 +455,4 @@ static inline void PathGraph_Tarjan(PathGraph *const restrict _pg, TransTable *c
     PathTarjan_destroy(&tarjan);
 }
 
-#endif // EDGETABLE_H //
+#endif // PATHTABLE_H //

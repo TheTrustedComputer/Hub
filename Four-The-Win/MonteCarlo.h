@@ -34,15 +34,13 @@ typedef enum : uint8_t
 }
 MCTSWDL;
 
-#pragma pack(push, 1)
-
 typedef struct MCTSNode
 {
     struct MCTSNode *restrict ancestor;
     struct MCTSNode *restrict *restrict descendants;
     uint64_t key; double visits, score;
     uint8_t move, count, /*nones, index; */ turn;
-    MCTSWDL wdl;
+    MCTSWDL wdl; uint32_t _; // alignment to 8-byte words in 64-bit systems
 }
 MCTSNode;
 
@@ -71,8 +69,6 @@ typedef struct MCTSResult
     double reward; uint8_t move;
 }
 MCTSResult;
-
-#pragma pack(pop)
 
 // static constexpr double MCTS_C = 1.4142135623730950488;
 
@@ -581,6 +577,14 @@ static inline MCTSNode *MCTSNode_Make7_expand(MCTSNode *const restrict _node, co
     {
         Make7_generate(_M7, MCTS_movArr, &_node->count);
 
+        /*if (!_node->count) // Full board debugger (should not happen)
+        {
+            puts("WARNING: Attempt to expand a full board node!");
+            _node->wdl = MCTS_DRAW;
+
+            return _node;
+        }*/
+
         _node->descendants = MemoryPool_alloc(&MCTS_nodePool, sizeof(*_node->descendants) * _node->count);
         MCTS_termCnt = 0;
 
@@ -969,7 +973,7 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
     Connect4 mctsC4;
     Connect4_Pop10 mctsP10 = *_P10;
 
-    Connect4_clone(_C4, &mctsC4);
+    !MCTS_MAKE7 ? Connect4_clone(_C4, &mctsC4) : FTW_VOID_NOP;
 
     Make7 mctsM7 = *_M7;
 
