@@ -1114,7 +1114,7 @@ static inline bool Make7_policy(const Make7 *const restrict _M7, char _movChr[co
             const uint64_t TILE_DROP_MASK_B = DROPPABLE_MASK & TILE_3_DROP_MASK & (j == 2 ? MAKE7_THREES_MASK : MAKE7_ALL);
             const uint8_t TILE_INDEX_B = j << 3;
 
-            if (OFF_TILES[i])
+            if (OFF_TILES[j])
             {
                 Make7_policy_addMove(OP_LINE3_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
                 Make7_policy_addMove(OP_LINE4_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
