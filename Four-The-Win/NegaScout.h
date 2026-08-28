@@ -1371,17 +1371,14 @@ static inline Result NegaScout_Make7_results(const Make7 *const restrict _M7, co
                 }
                 else
                 {
-#ifdef FTW_SQLITE
                     m7Key = Make7_partKey(&m7Copy);
-
+#ifdef FTW_SQLITE
                     if (!SQLite_Make7_query(database, m7Key, m7Copy.tile1, m7Copy.tile2, M7_targetMethod, res))
 #else
-                    m7Key = Make7_canonicalize(Make7_partKey(&m7Copy));
+                    uint64_t t1Key = m7Copy.tile1, t2Key = m7Copy.tile2;
 
-                    const uint64_t T1_KEY = Make7_canonicalize(m7Copy.tile1);
-                    const uint64_t T2_KEY = Make7_canonicalize(m7Copy.tile2);
-
-                    *res = ResultRing_query(m7Key, T1_KEY, T2_KEY);
+                    Make7_canonicalize(m7Key, t1Key, t2Key, &m7Key, &t1Key, &t2Key);
+                    *res = ResultRing_query(m7Key, t1Key, t2Key);
 
                     if (res->wdl == NULL_CHAR)
 #endif
@@ -1390,7 +1387,7 @@ static inline Result NegaScout_Make7_results(const Make7 *const restrict _M7, co
 #ifdef FTW_SQLITE
                         SQLite_Make7_insert(database, m7Key, m7Copy.tile1, m7Copy.tile2, M7_targetMethod, res);
 #else
-                        ResultRing_insert(m7Key, T1_KEY, T2_KEY, *res);
+                        ResultRing_insert(m7Key, t1Key, t2Key, *res);
 #endif
                     }
 
@@ -1428,13 +1425,13 @@ static inline Result NegaScout_Make7_results(const Make7 *const restrict _M7, co
 #ifdef FTW_SQLITE
     SQLite_Make7_insert(database, Make7_partKey(_M7), _M7->tile1, _M7->tile2, M7_targetMethod, &M7_BEST);
 #else
-    const uint64_t M7_PKEY = Make7_canonicalize(Make7_partKey(_M7));
-    const uint64_t M7_T1_KEY = Make7_canonicalize(_M7->tile1);
-    const uint64_t M7_T2_KEY = Make7_canonicalize(_M7->tile2);
+    uint64_t m7pKey = Make7_partKey(_M7), m7t1Key = _M7->tile1, m7t2Key = _M7->tile2;
 
-    if (ResultRing_query(M7_PKEY, M7_T1_KEY, M7_T2_KEY).wdl == NULL_CHAR)
+    Make7_canonicalize(m7pKey, m7t1Key, m7t2Key, &m7pKey, &m7t1Key, &m7t2Key);
+
+    if (ResultRing_query(m7pKey, m7t1Key, m7t2Key).wdl == NULL_CHAR)
     {
-        ResultRing_insert(M7_PKEY, M7_T1_KEY, M7_T2_KEY, M7_BEST);
+        ResultRing_insert(m7pKey, m7t1Key, m7t2Key, M7_BEST);
     }
 #endif
 

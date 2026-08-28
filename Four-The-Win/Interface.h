@@ -834,9 +834,11 @@ static inline void Interface_run(void)
 #else
                 if (UI_IS_MAKE7)
                 {
-                    m7Key = Make7_canonicalize(Make7_partKey(&UI_m7));
-                    t1Key =  Make7_canonicalize(UI_m7.tile1);
-                    t2Key =  Make7_canonicalize(UI_m7.tile2);
+                    m7Key = Make7_partKey(&UI_m7);
+                    t1Key = UI_m7.tile1;
+                    t2Key = UI_m7.tile2;
+
+                    Make7_canonicalize(m7Key, t1Key, t2Key, &m7Key, &t1Key, &t2Key);
                     result = ResultRing_query(m7Key, t1Key, t2Key);
                 }
                 else
@@ -1276,9 +1278,11 @@ static inline void Interface_run(void)
             {
                 if (UI_IS_MAKE7)
                 {
-                    m7Key = Make7_canonicalize(Make7_partKey(&UI_m7));
-                    t1Key = Make7_canonicalize(UI_m7.tile1);
-                    t2Key = Make7_canonicalize(UI_m7.tile2);
+                    m7Key = Make7_partKey(&UI_m7);
+                    t1Key = UI_m7.tile1;
+                    t2Key = UI_m7.tile2;
+
+                    Make7_canonicalize(m7Key, t1Key, t2Key, &m7Key, &t1Key, &t2Key);
                 }
                 else
                 {

@@ -1260,15 +1260,41 @@ static inline uint64_t Make7_reverse(const uint64_t _B)
     }
 }
 
+/////////////////////////////////////////////////////////////////////////////////
+/// @brief  Compares two Make 7 keys and determines if key A is less than key B.
+/// @param  _A0
+/// @param  _A1
+/// @param  _A2
+/// @param  _B0
+/// @param  _B1
+/// @param  _B2
+/////////////////////////////////////////////////////////////////////////////////
+static inline bool Make7_keyLess(const uint64_t _A0, const uint64_t _A1, const uint64_t _A2, const uint64_t _B0, const uint64_t  _B1, const uint64_t _B2)
+{
+    return _A0 < _B0 || (_A0 == _B0 && (_A1 < _B1 || (_A1 == _B1 && _A2 < _B2)));
+}
+
 ///////////////////////////////////////////////////////////////////////////
 /// @brief  Make 7 board canonicalization utility, not unlike Connect 4's.
-/// @param  _B
+/// @param  _K0
+/// @param  _K1
+/// @param  _K2
+/// @param  _ck0
+/// @param  _ck1
+/// @param  _ck2
 ///////////////////////////////////////////////////////////////////////////
-static inline uint64_t Make7_canonicalize(const uint64_t _B)
+static inline void Make7_canonicalize(const uint64_t _K0, const uint64_t _K1, const uint64_t _K2, uint64_t *const restrict _ck0, uint64_t *const restrict _ck1, uint64_t *const restrict _ck2)
 {
-    const uint64_t REV_M7 = Make7_reverse(_B);
+    const uint64_t REV_K0 = Make7_reverse(_K0);
+    const uint64_t REV_K1 = Make7_reverse(_K1);
+    const uint64_t REV_K2 = Make7_reverse(_K2);
 
-    return _B < REV_M7 ? _B : REV_M7;
+    if (Make7_keyLess(REV_K0, REV_K1, REV_K2, _K0, _K1, _K2))
+    {
+        *_ck0 = REV_K0;
+        *_ck1 = REV_K1;
+        *_ck2 = REV_K2;
+    }
 }
 
 /////////////////////////////////////////////////////////////////

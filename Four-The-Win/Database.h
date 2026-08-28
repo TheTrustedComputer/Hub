@@ -194,21 +194,23 @@ static inline bool SQLite_Connect4_pop10_query(sqlite3 *const restrict _db, cons
 ///////////////////////////////////////////////////////////////
 /// @brief  Searches the DB for a precomputed Make 7 solution.
 /// @param  _db
-/// @param  _K0
-/// @param  _K1
-/// @param  _K2
+/// @param  _k0
+/// @param  _k1
+/// @param  _k2
 /// @param  _WM
 /// @param  _res
 ///////////////////////////////////////////////////////////////
-static inline bool SQLite_Make7_query(sqlite3 *const restrict _db, const uint64_t _K0, const uint64_t _K1, const uint64_t _K2, const bool _WM, Result *const restrict _res)
+static inline bool SQLite_Make7_query(sqlite3 *const restrict _db, uint64_t _k0, uint64_t _k1, uint64_t _k2, const bool _WM, Result *const restrict _res)
 {
     sqlite3_stmt *stmt;
 
     SQLite_check(sqlite3_prepare_v2(_db, "SELECT r FROM s WHERE k0 = ? AND k1 = ? AND k2 = ? AND m = ?;", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare a selection statement for Make 7 -- %s.\e[0m\n");
 
-    sqlite3_bind_int64(stmt, 1, Make7_canonicalize(_K0));
-    sqlite3_bind_int64(stmt, 2, Make7_canonicalize(_K1));
-    sqlite3_bind_int64(stmt, 3, Make7_canonicalize(_K2));
+    Make7_canonicalize(_k0, _k1, _k2, &_k0, &_k1, &_k2);
+
+    sqlite3_bind_int64(stmt, 1, _k0);
+    sqlite3_bind_int64(stmt, 2, _k1);
+    sqlite3_bind_int64(stmt, 3, _k2);
     sqlite3_bind_int(stmt, 4, _WM);
 
     if (sqlite3_step(stmt) == SQLITE_ROW)
@@ -316,13 +318,13 @@ static inline bool SQLite_Connect4_pop10_insert(sqlite3 *const restrict _db, con
 //////////////////////////////////////////////
 /// @brief  Writes a Make 7 result to the DB.
 /// @param  _db
-/// @param  _K0
-/// @param  _K1
-/// @param  _K2
+/// @param  _k0
+/// @param  _k1
+/// @param  _k2
 /// @param  _WM
 /// @param  _res
 //////////////////////////////////////////////
-static inline bool SQLite_Make7_insert(sqlite3 *const restrict _db, const uint64_t _K0, const uint64_t _K1, const uint64_t _K2, const bool _WM, const Result *const restrict _RES)
+static inline bool SQLite_Make7_insert(sqlite3 *const restrict _db, uint64_t _k0, uint64_t _k1, uint64_t _k2, const bool _WM, const Result *const restrict _RES)
 {
     sqlite3_stmt *stmt;
 
@@ -330,9 +332,11 @@ static inline bool SQLite_Make7_insert(sqlite3 *const restrict _db, const uint64
 
     resBlob[0] = Result_toScalar(_RES);
 
-    sqlite3_bind_int64(stmt, 1, Make7_canonicalize(_K0));
-    sqlite3_bind_int64(stmt, 2, Make7_canonicalize(_K1));
-    sqlite3_bind_int64(stmt, 3, Make7_canonicalize(_K2));
+    Make7_canonicalize(_k0, _k1, _k2, &_k0, &_k1, &_k2);
+
+    sqlite3_bind_int64(stmt, 1, _k0);
+    sqlite3_bind_int64(stmt, 2, _k1);
+    sqlite3_bind_int64(stmt, 3, _k2);
     sqlite3_bind_int(stmt, 4, _WM);
     sqlite3_bind_blob(stmt, 5, resBlob, 1, SQLITE_STATIC);
 
