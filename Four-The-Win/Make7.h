@@ -297,43 +297,6 @@ static inline void Make7_append(uint8_t _arr[restrict static 1], uint8_t *const 
     }
 }
 
-//////////////////////////////////////////////////////////////////////
-/// @brief  Generates a list of legal Make 7 moves in octal notation.
-/// @param  _M7
-/// @param  _arr
-/// @param  _num
-//////////////////////////////////////////////////////////////////////
-static inline void Make7_generate(const Make7 *const restrict _M7, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
-{
-    const uint8_t OFF_TILES[3] = { Make7_count(_M7->avails, _M7->turn, 0), Make7_count(_M7->avails, _M7->turn, 1), Make7_count(_M7->avails, _M7->turn, 2) };
-    const uint64_t MOVE_COL_MASK = (_M7->mask + MAKE7_BOT) & MAKE7_ALL;
-
-    uint64_t tileColMask = MOVE_COL_MASK & MAKE7_THREES_MASK;
-    uint8_t tilePosition = 0; *_num = 0;
-
-#ifdef __clang__
-    #pragma clang loop unroll(enable)
-#elifdef __GNUC__
-    #pragma GCC unroll 3
-#endif
-    for (uint8_t tileIndex = 3; tileIndex--;)
-    {
-        const uint8_t TILE_SHIFT = tileIndex << 3;
-
-        while (tileColMask && OFF_TILES[tileIndex])
-        {
-            const uint64_t TILE_MASK = tileColMask & -tileColMask;
-
-            Make7_append(_arr, _num, TILE_SHIFT | stdc_trailing_zeros_ull(TILE_MASK) >> 3, tilePosition);
-
-            tileColMask ^= TILE_MASK;
-        }
-
-        tileColMask = MOVE_COL_MASK;
-        tilePosition = *_num;
-    }
-}
-
 //////////////////////////////////////////////////////////////////////////////
 /// @brief          Does the entire maximal run of tiles meet the target sum?
 /// @param  _P_T1   Bitmap of player tiles of value 1.
@@ -461,16 +424,6 @@ static inline bool Make7_targetSum(const Make7 *const restrict _M7)
     return false;
 }
 
-/////////////////////////////////////////////////////////////
-/// @brief      Selects a target sum (win condition) method.
-/// @details    Exact: 2+2+3=7 => win; 2+2+2+3=9 => no win
-///             Slider: 2+2+2+3 == 2+[2+2+3] => win
-/////////////////////////////////////////////////////////////
-static inline void Make7_setTargetMethod(void)
-{
-    Make7_targetSum_choice = M7_targetMethod ? Make7_targetSum_window : Make7_targetSum_exact;
-}
-
 //////////////////////////////////////////////////////
 /// @brief  Sees if the player can win on their move.
 /// @param  _M7
@@ -508,6 +461,674 @@ static inline bool Make7_canWin(const Make7 *const restrict _M7)
     return false;
 }
 
+//////////////////////////////////////////////////////////////////////
+/// @brief  Generates a list of legal Make 7 moves in octal notation.
+/// @param  _M7
+/// @param  _arr
+/// @param  _num
+//////////////////////////////////////////////////////////////////////
+static inline void Make7_generate(const Make7 *const restrict _M7, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+{
+    const uint8_t OFF_TILES[3] = { Make7_count(_M7->avails, _M7->turn, 0), Make7_count(_M7->avails, _M7->turn, 1), Make7_count(_M7->avails, _M7->turn, 2) };
+    const uint64_t DROP_COL_MASK = (_M7->mask + MAKE7_BOT) & MAKE7_ALL;
+
+    uint64_t tileColMask = DROP_COL_MASK & MAKE7_THREES_MASK;
+    uint8_t tilePosition = 0; *_num = 0;
+
+#ifdef __clang__
+    #pragma clang loop unroll(enable)
+#elifdef __GNUC__
+    #pragma GCC unroll 3
+#endif
+    for (uint8_t tileIndex = 3; tileIndex--;)
+    {
+        const uint8_t TILE_SHIFT = tileIndex << 3;
+
+        while (tileColMask && OFF_TILES[tileIndex])
+        {
+            const uint64_t TILE_MASK = tileColMask & -tileColMask;
+
+            Make7_append(_arr, _num, TILE_SHIFT | stdc_trailing_zeros_ull(TILE_MASK) >> 3, tilePosition);
+
+            tileColMask ^= TILE_MASK;
+        }
+
+        tileColMask = DROP_COL_MASK;
+        tilePosition = *_num;
+    }
+}
+
+/*static inline void Make7_generate(const Make7 *const restrict _M7, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+{
+    const uint8_t OFF_TILES[3] = { Make7_count(_M7->avails, _M7->turn, 0), Make7_count(_M7->avails, _M7->turn, 1), Make7_count(_M7->avails, _M7->turn, 2) };
+    const uint64_t OP_SIDE = _M7->side ^ _M7->mask;
+    const uint64_t OP_THREATS[3] = { Make7_sumThreats(OP_SIDE, _M7->mask, _M7->tile1, _M7->tile2, 0),
+                                     Make7_sumThreats(OP_SIDE, _M7->mask, _M7->tile1, _M7->tile2, 1),
+                                     Make7_sumThreats(OP_SIDE, _M7->mask, _M7->tile1, _M7->tile2, 2) };
+
+    uint64_t dropColMask = (_M7->mask + MAKE7_BOT) & MAKE7_ALL;
+    uint64_t tileColMask = dropColMask & MAKE7_THREES_MASK;
+    uint8_t tileIndex, tilePosition = 0; *_num = 0;
+
+    for (tileIndex = 0; tileIndex < 3; tileIndex++)
+    {
+        const uint64_t THREAT_MASK = OP_THREATS[tileIndex] & dropColMask & (tileIndex == 2 ? MAKE7_THREES_MASK : MAKE7_ALL);
+
+        if (THREAT_MASK)
+        {
+            tileColMask = dropColMask = THREAT_MASK;
+
+            break;
+        }
+    }
+
+#ifdef __clang__
+    #pragma clang loop unroll(enable)
+#elifdef __GNUC__
+    #pragma GCC unroll 3
+#endif
+    for (tileIndex = 3; tileIndex--;)
+    {
+        const uint8_t TILE_SHIFT = tileIndex << 3;
+
+        while (tileColMask && OFF_TILES[tileIndex])
+        {
+            const uint64_t TILE_MASK = tileColMask & -tileColMask;
+
+            Make7_append(_arr, _num, TILE_SHIFT | stdc_trailing_zeros_ull(TILE_MASK) >> 3, tilePosition);
+
+            tileColMask ^= TILE_MASK;
+        }
+
+        tileColMask = dropColMask;
+        tilePosition = *_num;
+    }
+}*/
+
+/////////////////////////////////////////////////////////////////
+/// @brief  Does the multiset contain at least a pair of size 4?
+/// @param  _A
+/// @param  _B
+/// @param  _C
+/// @param  _D
+/////////////////////////////////////////////////////////////////
+static inline uint64_t Make7_atLeast2of4(const uint64_t _A, const uint64_t _B, const uint64_t _C, const uint64_t _D)
+{
+    return (_A & _B) | (_C & _D) | ((_A | _B) & (_C | _D));
+}
+
+////////////////////////////////////////////////////////////////////
+/// @brief  Does the multiset contain at least a triplet of size 4?
+/// @param  _A
+/// @param  _B
+/// @param  _C
+/// @param  _D
+////////////////////////////////////////////////////////////////////
+static inline uint64_t Make7_atLeast3of4(const uint64_t _A, const uint64_t _B, const uint64_t _C, const uint64_t _D)
+{
+    return (_A & _B & (_C | _D)) | (_C & _D & (_A | _B));
+}
+
+///////////////////////////////////////////////////////////////////////
+/// @brief  Does the multiset contain at least a quadruplet of size 5?
+/// @param  _A
+/// @param  _B
+/// @param  _C
+/// @param  _D
+/// @param  _E
+///////////////////////////////////////////////////////////////////////
+static inline uint64_t Make7_atLeast4of5(const uint64_t _A, const uint64_t _B, const uint64_t _C, const uint64_t _D, const uint64_t _E)
+{
+    return (_A & _B & _C & _D) | (_E & Make7_atLeast3of4(_A, _B, _C, _D));
+}
+
+////////////////////////////////////////////
+/// @brief  Line-3 threat searcher (A+A+_).
+/// @param  _A
+/// @param  _DIR
+////////////////////////////////////////////
+static inline uint64_t Make7_line3_AA_dir(const uint64_t _A, const uint8_t _DIR)
+{
+    const uint8_t DI2 = _DIR << 1;
+    const uint64_t NEXT = _A & _A >> _DIR;
+
+    return NEXT >> _DIR | NEXT << DI2 | (_A & _A >> DI2) << _DIR;
+}
+
+////////////////////////////////////////////
+/// @brief  Line-3 threat searcher (A+B+_).
+/// @param  _A
+/// @param  _B
+/// @param  _DIR
+/// @return A 1 bit where a threat exists.
+////////////////////////////////////////////
+static inline uint64_t Make7_line3_AB_dir(const uint64_t _A, const uint64_t _B, const uint8_t _DIR)
+{
+    const uint8_t DI2 = _DIR << 1;
+    const uint64_t NEXT = (_A & _B >> _DIR) |  (_B & _A >> _DIR);
+    const uint64_t SPLIT = (_A & _B >> DI2) | (_B & _A >> DI2);
+
+    return NEXT >> _DIR | NEXT << DI2 | SPLIT << _DIR;
+}
+
+/////////////////////////////////////////////////////////////
+/// @brief  Find line-4 threats in a direction (AAA_ class).
+/// @param  _A
+/// @param  _DIR
+/////////////////////////////////////////////////////////////
+static inline uint64_t Make7_line4_AAA_dir(const uint64_t _A, const uint8_t _DIR)
+{
+    const uint8_t DI2 = _DIR << 1;
+    const uint8_t DI3 = _DIR + DI2;
+
+    const uint64_t A1 = _A >> _DIR;
+    const uint64_t A2 = _A >> DI2;
+    const uint64_t A3 = _A >> DI3;
+
+    return (A1 & A2 & A3) | ((_A & A2 & A3) << _DIR) | ((_A & A1 & A3) << DI2) | ((_A & A1 & A2) << DI3);
+}
+
+/////////////////////////////////////////////////////////////
+/// @brief  Find line-4 threats in a direction (ABB_ class).
+/// @param  _A
+/// @param  _B
+/// @param  _DIR
+/////////////////////////////////////////////////////////////
+static inline uint64_t Make7_line4_ABB_dir(const uint64_t _A, const uint64_t _B, const uint8_t _DIR)
+{
+    const uint8_t DI2 = _DIR << 1;
+    const uint8_t DI3 = _DIR + DI2;
+
+    const uint64_t A1 = _A >> _DIR;
+    const uint64_t A2 = _A >> DI2;
+    const uint64_t A3 = _A >> DI3;
+
+    const uint64_t B1 = _B >> _DIR;
+    const uint64_t B2 = _B >> DI2;
+    const uint64_t B3 = _B >> DI3;
+
+    const uint64_t B01 = _B & B1;
+    const uint64_t B02 = _B & B2;
+    const uint64_t B03 = _B & B3;
+
+    const uint64_t B12 = B1 & B2;
+    const uint64_t B13 = B1 & B3;
+    const uint64_t B23 = B2 & B3;
+
+    return ((A1 | A2 | A3) & (B12 | B13 | B23)) | (((_A | A2 | A3) & (B02 | B03 | B23)) << _DIR) |
+           (((_A | A1 | A3) & (B01 | B03 | B13)) << DI2) | (((_A | A1 | A2) & (B01 | B02 | B12)) << DI3);
+}
+
+/////////////////////////////////////////////////////////////
+/// @brief  Find line-4 threats in a direction (ABC_ class).
+/// @param  _A
+/// @param  _B
+/// @param  _C
+/// @param  _DIR
+/////////////////////////////////////////////////////////////
+static inline uint64_t Make7_line4_ABC_dir(const uint64_t _A, const uint64_t _B, const uint64_t _C, const uint8_t _DIR)
+{
+    const uint8_t DI2 = _DIR << 1;
+    const uint8_t DI3 = _DIR + DI2;
+
+    const uint64_t A1 = _A >> _DIR;
+    const uint64_t A2 = _A >> DI2;
+    const uint64_t A3 = _A >> DI3;
+
+    const uint64_t B1 = _B >> _DIR;
+    const uint64_t B2 = _B >> DI2;
+    const uint64_t B3 = _B >> DI3;
+
+    const uint64_t C1 = _C >> _DIR;
+    const uint64_t C2 = _C >> DI2;
+    const uint64_t C3 = _C >> DI3;
+
+    const uint64_t BC01 = (_B & C1) | (_C & B1);
+    const uint64_t BC02 = (_B & C2) | (_C & B2);
+    const uint64_t BC03 = (_B & C3) | (_C & B3);
+
+    const uint64_t BC12 = (B1 & C2) | (C1 & B2);
+    const uint64_t BC13 = (B1 & C3) | (C1 & B3);
+    const uint64_t BC23 = (B2 & C3) | (C2 & B3);
+
+    return ((A1 | A2 | A3) & (BC12 | BC13 | BC23)) | (((_A | A2 | A3) & (BC02 | BC03 | BC23)) << _DIR) |
+           (((_A | A1 | A3) & (BC01 | BC03 | BC13)) << DI2) | (((_A | A1 | A2) & (BC01 | BC02 | BC12)) << DI3);
+}
+
+//////////////////////////////////////////////////////////////////
+/// @brief  Find line-5 threats and in a direction (AAAA_ class).
+/// @param  _A
+/// @param  _DIR
+//////////////////////////////////////////////////////////////////
+static inline uint64_t Make7_line5_AAAA_dir(const uint64_t _A, const uint8_t _DIR)
+{
+    const uint8_t DI2 = _DIR << 1;
+    const uint8_t DI3 = _DIR + DI2;
+    const uint8_t DI4 = DI2 << 1;
+
+    const uint64_t A1 = _A >> _DIR;
+    const uint64_t A2 = _A >> DI2;
+    const uint64_t A3 = _A >> DI3;
+    const uint64_t A4 = _A >> DI4;
+
+    return (A1 & A2 & A3 & A4) | ((_A & A2 & A3 & A4) << _DIR) | ((_A & A1 & A3 & A4) << DI2) | ((_A & A1 & A2 & A4) << DI3) | ((_A & A1 & A2 & A3) << DI4);
+}
+
+//////////////////////////////////////////////////////////////////
+/// @brief  Find line-5 threats and in a direction (AABB_ class).
+/// @param  _A
+/// @param  _B
+/// @param  _DIR
+//////////////////////////////////////////////////////////////////
+static inline uint64_t Make7_line5_AABB_dir(const uint64_t _A, const uint64_t _B, const uint8_t _DIR)
+{
+    const uint8_t DI2 = _DIR << 1;
+    const uint8_t DI3 = _DIR + DI2;
+    const uint8_t DI4 = DI2 << 1;
+
+    const uint64_t A1 = _A >> _DIR;
+    const uint64_t A2 = _A >> DI2;
+    const uint64_t A3 = _A >> DI3;
+    const uint64_t A4 = _A >> DI4;
+
+    const uint64_t B1 = _B >> _DIR;
+    const uint64_t B2 = _B >> DI2;
+    const uint64_t B3 = _B >> DI3;
+    const uint64_t B4 = _B >> DI4;
+
+    return (Make7_atLeast2of4(A1, A2, A3, A4) & Make7_atLeast2of4(B1, B2, B3, B4)) | ((Make7_atLeast2of4(_A, A2, A3, A4) & Make7_atLeast2of4(_B, B2, B3, B4)) << _DIR) |
+           ((Make7_atLeast2of4(_A, A1, A3, A4) & Make7_atLeast2of4(_B, B1, B3, B4)) << DI2) | ((Make7_atLeast2of4(_A, A1, A2, A4) & Make7_atLeast2of4(_B, B1, B2, B4)) << DI3) |
+           ((Make7_atLeast2of4(_A, A1, A2, A3) & Make7_atLeast2of4(_B, B1, B2, B3)) << DI4);
+}
+
+//////////////////////////////////////////////////////////////
+/// @brief  Find line-5 threats in a direction (ABBB_ class).
+/// @param  _A
+/// @param  _B
+/// @param  _DIR
+//////////////////////////////////////////////////////////////
+static inline uint64_t Make7_line5_ABBB_dir(const uint64_t _A, const uint64_t _B, const uint8_t _DIR)
+{
+    const uint8_t DI2 = _DIR << 1;
+    const uint8_t DI3 = _DIR + DI2;
+    const uint8_t DI4 = DI2 << 1;
+
+    const uint64_t A1 = _A >> _DIR;
+    const uint64_t A2 = _A >> DI2;
+    const uint64_t A3 = _A >> DI3;
+    const uint64_t A4 = _A >> DI4;
+
+    const uint64_t B1 = _B >> _DIR;
+    const uint64_t B2 = _B >> DI2;
+    const uint64_t B3 = _B >> DI3;
+    const uint64_t B4 = _B >> DI4;
+
+    return ((A1 | A2 | A3 | A4) & Make7_atLeast3of4(B1, B2, B3, B4)) | (((_A | A2 | A3 | A4) & Make7_atLeast3of4(_B, B2, B3, B4)) << _DIR) |
+           (((_A | A1 | A3 | A4) & Make7_atLeast3of4(_B, B1, B3, B4)) << DI2) | (((_A | A1 | A2 | A4) & Make7_atLeast3of4(_B, B1, B2, B4)) << DI3) |
+           (((_A | A1 | A2 | A3) & Make7_atLeast3of4(_B, B1, B2, B3)) << DI4);
+}
+
+///////////////////////////////////////////////////////////////
+/// @brief  Find line-6 threats in a direction (AAAAA_ class).
+/// @param  _A
+/// @param  _DIR
+///////////////////////////////////////////////////////////////
+static inline uint64_t Make7_line6_AAAAA_dir(const uint64_t _A, const uint8_t _DIR)
+{
+    const uint8_t DI2 = _DIR << 1;
+    const uint8_t DI3 = _DIR + DI2;
+    const uint8_t DI4 = DI2 << 1;
+    const uint8_t DI5 = _DIR + DI4;
+
+    const uint64_t A1 = _A >> _DIR;
+    const uint64_t A2 = _A >> DI2;
+    const uint64_t A3 = _A >> DI3;
+    const uint64_t A4 = _A >> DI4;
+    const uint64_t A5 = _A >> DI5;
+
+    return (A1 & A2 & A3 & A4 & A5) | ((_A & A2 & A3 & A4 & A5) << _DIR) | ((_A & A1 & A3 & A4 & A5) << DI2) |
+           ((_A & A1 & A2 & A4 & A5) << DI3) | ((_A & A1 & A2 & A3 & A5) << DI4) | ((_A & A1 & A2 & A3 & A4) << DI5);
+}
+
+///////////////////////////////////////////////////////////////
+/// @brief  Find line-6 threats in a direction (ABBBB_ class).
+/// @param  _A
+/// @param  _B
+/// @param  _DIR
+///////////////////////////////////////////////////////////////
+static inline uint64_t Make7_line6_ABBBB_dir(const uint64_t _A, const uint64_t _B, const uint8_t _DIR)
+{
+    const uint8_t DI2 = _DIR << 1;
+    const uint8_t DI3 = _DIR + DI2;
+    const uint8_t DI4 = DI2 << 1;
+    const uint8_t DI5 = _DIR + DI4;
+
+    const uint64_t A1 = _A >> _DIR;
+    const uint64_t A2 = _A >> DI2;
+    const uint64_t A3 = _A >> DI3;
+    const uint64_t A4 = _A >> DI4;
+    const uint64_t A5 = _A >> DI5;
+
+    const uint64_t B1 = _B >> _DIR;
+    const uint64_t B2 = _B >> DI2;
+    const uint64_t B3 = _B >> DI3;
+    const uint64_t B4 = _B >> DI4;
+    const uint64_t B5 = _B >> DI5;
+
+    return ((A1 | A2 | A3 | A4 | A5) & Make7_atLeast4of5(B1, B2, B3, B4, B5)) | (((_A | A2 | A3 | A4 | A5) & Make7_atLeast4of5(_B, B2, B3, B4, B5)) << _DIR) |
+           (((_A | A1 | A3 | A4 | A5) & Make7_atLeast4of5(_B, B1, B3, B4, B5)) << DI2) | (((_A | A1 | A2 | A4 | A5) & Make7_atLeast4of5(_B, B1, B2, B4, B5)) << DI3) |
+           (((_A | A1 | A2 | A3 | A5) & Make7_atLeast4of5(_B, B1, B2, B3, B5)) << DI4) | (((_A | A1 | A2 | A3 | A4) & Make7_atLeast4of5(_B, B1, B2, B3, B4)) << DI5);
+}
+
+////////////////////////////////////////////////////////////////
+/// @brief  Find line-7 threats in a direction (AAAAAA_ class).
+/// @param  _A
+/// @param  _DIR
+////////////////////////////////////////////////////////////////
+static inline uint64_t Make7_line7_AAAAAA_dir(const uint64_t _A, const uint8_t _DIR)
+{
+    const uint8_t DI2 = _DIR << 1;
+    const uint8_t DI3 = _DIR + DI2;
+    const uint8_t DI4 = DI2 << 1;
+    const uint8_t DI5 = _DIR + DI4;
+    const uint8_t DI6 = DI3 << 1;
+
+    const uint64_t A1 = _A >> _DIR;
+    const uint64_t A2 = _A >> DI2;
+    const uint64_t A3 = _A >> DI3;
+    const uint64_t A4 = _A >> DI4;
+    const uint64_t A5 = _A >> DI5;
+    const uint64_t A6 = _A >> DI6;
+
+    return (A1 & A2 & A3 & A4 & A5 & A6) | ((_A & A2 & A3 & A4 & A5 & A6) << _DIR) | ((_A & A1 & A3 & A4 & A5 & A6) << DI2) | ((_A & A1 & A2 & A4 & A5 & A6) << DI3) |
+           ((_A & A1 & A2 & A3 & A5 & A6) << DI4) | ((_A & A1 & A2 & A3 & A4 & A6) << DI5) | ((_A & A1 & A2 & A3 & A4 & A5) << DI6);
+}
+
+//////////////////////////////////////////////////////////
+/// @brief  Find line-3 threats and set bits (AA_ class).
+/// @param  _A
+//////////////////////////////////////////////////////////
+static inline uint64_t Make7_line3_AA_bits(const uint64_t _A)
+{
+    return Make7_line3_AA_dir(_A, 1) | Make7_line3_AA_dir(_A, MAKE7_SIZE) | Make7_line3_AA_dir(_A, MAKE7_SIZE_P1) | Make7_line3_AA_dir(_A, MAKE7_SIZE_P2);
+}
+
+//////////////////////////////////////////////////////////
+/// @brief  Find line-3 threats and set bits (AB_ class).
+/// @param  _A
+/// @param  _B
+//////////////////////////////////////////////////////////
+static inline uint64_t Make7_line3_AB_bits(const uint64_t _A, const uint64_t _B)
+{
+    return Make7_line3_AB_dir(_A, _B, 1) | Make7_line3_AB_dir(_A, _B, MAKE7_SIZE) | Make7_line3_AB_dir(_A, _B, MAKE7_SIZE_P1) | Make7_line3_AB_dir(_A, _B, MAKE7_SIZE_P2);
+}
+
+///////////////////////////////////////////////////////////
+/// @brief  Find line-4 threats and set bits (AAA_ class).
+/// @param  _A
+///////////////////////////////////////////////////////////
+static inline uint64_t Make7_line4_AAA_bits(const uint64_t _A)
+{
+    return Make7_line4_AAA_dir(_A, 1) | Make7_line4_AAA_dir(_A, MAKE7_SIZE) | Make7_line4_AAA_dir(_A, MAKE7_SIZE_P1) | Make7_line4_AAA_dir(_A, MAKE7_SIZE_P2);
+}
+
+///////////////////////////////////////////////////////////
+/// @brief  Find line-4 threats and set bits (ABB_ class).
+/// @param  _A
+/// @param  _B
+///////////////////////////////////////////////////////////
+static inline uint64_t Make7_line4_ABB_bits(const uint64_t _A, const uint64_t _B)
+{
+    return Make7_line4_ABB_dir(_A, _B, 1) | Make7_line4_ABB_dir(_A, _B, MAKE7_SIZE) | Make7_line4_ABB_dir(_A, _B, MAKE7_SIZE_P1) | Make7_line4_ABB_dir(_A, _B, MAKE7_SIZE_P2);
+}
+
+///////////////////////////////////////////////////////////
+/// @brief  Find line-4 threats and set bits (ABC_ class).
+/// @param  _A
+/// @param  _B
+/// @param  _C
+///////////////////////////////////////////////////////////
+static inline uint64_t Make7_line4_ABC_bits(const uint64_t _A, const uint64_t _B, const uint64_t _C)
+{
+    return Make7_line4_ABC_dir(_A, _B, _C, 1) | Make7_line4_ABC_dir(_A, _B, _C, MAKE7_SIZE) | Make7_line4_ABC_dir(_A, _B, _C, MAKE7_SIZE_P1) | Make7_line4_ABC_dir(_A, _B, _C, MAKE7_SIZE_P2);
+}
+
+////////////////////////////////////////////////////////////
+/// @brief  Find line-5 threats and set bits (AAAA_ class).
+/// @param  _A
+////////////////////////////////////////////////////////////
+static inline uint64_t Make7_line5_AAAA_bits(const uint64_t _A)
+{
+    return Make7_line5_AAAA_dir(_A, 1) | Make7_line5_AAAA_dir(_A, MAKE7_SIZE) | Make7_line5_AAAA_dir(_A, MAKE7_SIZE_P1) | Make7_line5_AAAA_dir(_A, MAKE7_SIZE_P2);
+}
+
+////////////////////////////////////////////////////////////
+/// @brief  Find line-5 threats and set bits (AABB_ class).
+/// @param  _A
+/// @param  _B
+////////////////////////////////////////////////////////////
+static inline uint64_t Make7_line5_AABB_bits(const uint64_t _A, const uint64_t _B)
+{
+    return Make7_line5_AABB_dir(_A, _B, 1) | Make7_line5_AABB_dir(_A, _B, MAKE7_SIZE) | Make7_line5_AABB_dir(_A, _B, MAKE7_SIZE_P1) | Make7_line5_AABB_dir(_A, _B, MAKE7_SIZE_P2);
+}
+
+////////////////////////////////////////////////////////////
+/// @brief  Find line-5 threats and set bits (ABBB_ class).
+/// @param  _A
+/// @param  _B
+////////////////////////////////////////////////////////////
+static inline uint64_t Make7_line5_ABBB_bits(const uint64_t _A, const uint64_t _B)
+{
+    return Make7_line5_ABBB_dir(_A, _B, 1) | Make7_line5_ABBB_dir(_A, _B, MAKE7_SIZE) | Make7_line5_ABBB_dir(_A, _B, MAKE7_SIZE_P1) | Make7_line5_ABBB_dir(_A, _B, MAKE7_SIZE_P2);
+}
+
+/////////////////////////////////////////////////////////////
+/// @brief  Find line-6 threats and set bits (AAAAA_ class).
+/// @param  _A
+/// @param  _B
+/////////////////////////////////////////////////////////////
+static inline uint64_t Make7_line6_AAAAA_bits(const uint64_t _A)
+{
+    return Make7_line6_AAAAA_dir(_A, 1) | Make7_line6_AAAAA_dir(_A, MAKE7_SIZE) | Make7_line6_AAAAA_dir(_A, MAKE7_SIZE_P1) | Make7_line6_AAAAA_dir(_A, MAKE7_SIZE_P2);
+}
+
+/////////////////////////////////////////////////////////////
+/// @brief  Find line-6 threats and set bits (ABBBB_ class).
+/// @param  _A
+/// @param  _B
+/////////////////////////////////////////////////////////////
+static inline uint64_t Make7_line6_ABBBB_bits(const uint64_t _A, const uint64_t _B)
+{
+    return Make7_line6_ABBBB_dir(_A, _B, 1) | Make7_line6_ABBBB_dir(_A, _B, MAKE7_SIZE) | Make7_line6_ABBBB_dir(_A, _B, MAKE7_SIZE_P1) | Make7_line6_ABBBB_dir(_A, _B, MAKE7_SIZE_P2);
+}
+
+/////////////////////////////////////////////////////////////
+/// @brief  Find line-7 threats and set bits (AAAAAA_ class).
+/// @param  _A
+/////////////////////////////////////////////////////////////
+static inline uint64_t Make7_line7_AAAAAA_bits(const uint64_t _A)
+{
+    return Make7_line7_AAAAAA_dir(_A, 1) | Make7_line7_AAAAAA_dir(_A, MAKE7_SIZE) | Make7_line7_AAAAAA_dir(_A, MAKE7_SIZE_P1) | Make7_line7_AAAAAA_dir(_A, MAKE7_SIZE_P2);
+}
+
+//////////////////////////////////////////////////////
+/// @brief  Make 7's threat detector for line-3 wins.
+/// @param  _ONES
+/// @param  _TWOS
+/// @param  _THREES
+/// @param  _TILE
+//////////////////////////////////////////////////////
+static inline uint64_t Make7_line3_threats(const uint64_t _ONES, const uint64_t _TWOS, const uint64_t _THREES, const uint8_t _TILE)
+{
+    switch (_TILE)
+    {
+    case 0: // 3+3+[1]
+        return Make7_line3_AA_bits(_THREES);
+    case 1: // 3+2+[2]
+        return Make7_line3_AB_bits(_THREES, _TWOS);
+    case 2: // 2+2+[3], 3+1+[3]
+        return  Make7_line3_AA_bits(_TWOS) | Make7_line3_AB_bits(_THREES, _ONES);
+    }
+
+    return 0;
+}
+
+//////////////////////////////////////////////////////
+/// @brief  Make 7's threat detector for line-4 wins.
+/// @param  _ONES
+/// @param  _TWOS
+/// @param  _THREES
+/// @param  _TILE
+//////////////////////////////////////////////////////
+static inline uint64_t Make7_line4_threats(const uint64_t _ONES, const uint64_t _TWOS, const uint64_t _THREES, const uint8_t _TILE)
+{
+    switch (_TILE)
+    {
+    case 0: // 3+2+1+[1], 2+2+2+[1]
+        return Make7_line4_ABC_bits(_THREES, _TWOS, _ONES) | Make7_line4_AAA_bits(_TWOS);
+    case 1: // 3+1+1+[2], 1+2+2+[2]
+        return Make7_line4_ABB_bits(_THREES, _ONES) | Make7_line4_ABB_bits(_ONES, _TWOS);
+    case 2: // 2+1+1+[3]
+        return Make7_line4_ABB_bits(_TWOS, _ONES);
+    }
+
+    return 0;
+}
+
+//////////////////////////////////////////////////////
+/// @brief  Make 7's threat detector for line-5 wins.
+/// @param  _ONES
+/// @param  _TWOS
+/// @param  _THREES
+/// @param  _TILE
+//////////////////////////////////////////////////////
+static inline uint64_t Make7_line5_threats(const uint64_t _ONES, const uint64_t _TWOS, const uint64_t _THREES, const uint8_t _TILE)
+{
+    switch (_TILE)
+    {
+    case 0: // 3+1+1+1+[1], 2+2+1+1+[1]
+        return Make7_line5_ABBB_bits(_THREES, _ONES) | Make7_line5_AABB_bits(_TWOS, _ONES);
+    case 1: // 2+1+1+1+[2]
+        return Make7_line5_ABBB_bits(_TWOS, _ONES);
+    case 2: // 1+1+1+1+[3]
+        return Make7_line5_AAAA_bits(_ONES);
+    }
+
+    return 0;
+}
+
+//////////////////////////////////////////////////////
+/// @brief  Make 7's threat detector for line-6 wins.
+/// @param  _ONES
+/// @param  _TWOS
+/// @param  _TILE
+/// @note   #3 tiles overshoot the sum.
+//////////////////////////////////////////////////////
+static inline uint64_t Make7_line6_threats(const uint64_t _ONES, const uint64_t _TWOS, const uint8_t _TILE)
+{
+    switch (_TILE)
+    {
+    case 0: // 2+1+1+1+1+[1]
+        return Make7_line6_ABBBB_bits(_TWOS, _ONES);
+    case 1: // 1+1+1+1+1+[2]
+        return Make7_line6_AAAAA_bits(_ONES);
+    }
+
+    return 0;
+}
+
+/////////////////////////////////////////////////////////
+/// @brief  Make 7's threat detector for line-6 wins.
+/// @param  _ONES
+/// @note   #2 and #3 tiles cannot participate in a win.
+/////////////////////////////////////////////////////////
+static inline uint64_t Make7_line7_threats(const uint64_t _ONES)
+{
+    return Make7_line7_AAAAAA_bits(_ONES); // 1+1+1+1+1+1+[1]
+}
+
+/////////////////////////////////////////////
+/// @brief  Adds a move to the policy array.
+/// @param  _bitPos
+/// @param  _T_INDEX
+/// @param  _arr
+/// @param  _cnt
+/////////////////////////////////////////////
+static inline void Make7_policy_addMove(uint64_t _bitPos, const uint8_t _T_INDEX, uint8_t _arr[const restrict static MAKE7_SIZE_X3], uint8_t *const restrict _cnt)
+{
+    while (_bitPos)
+    {
+        const uint64_t T_POS = _bitPos & -_bitPos;
+
+        _arr[(*_cnt)++] = _T_INDEX | stdc_trailing_zeros_ull(T_POS) >> 3;
+        _bitPos ^= T_POS;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief  Zero-ply move policy for Make 7.
+/// @param  _M7
+/// @param  _movChr
+/// @note   Humanizes loss-in-1 moves (prefer blocking a sum over allowing it).
+////////////////////////////////////////////////////////////////////////////////
+static inline void Make7_policy(const Make7 *const restrict _M7, char _movChr[const restrict static 2])
+{
+    const uint64_t ALL_T3_MASK = _M7->mask ^ (_M7->tile1 | _M7->tile2);
+    const uint64_t OP_SIDE = _M7->side ^ _M7->mask;
+    const uint64_t OP_T1_MASK = OP_SIDE & _M7->tile1;
+    const uint64_t OP_T2_MASK = OP_SIDE & _M7->tile2;
+    const uint64_t OP_T3_MASK = OP_SIDE & ALL_T3_MASK;
+
+    const uint64_t OP_LINE3_THREATS[3] = { Make7_line3_threats(OP_T1_MASK, OP_T2_MASK, OP_T3_MASK, 0),
+                                           Make7_line3_threats(OP_T1_MASK, OP_T2_MASK, OP_T3_MASK, 1),
+                                           Make7_line3_threats(OP_T1_MASK, OP_T2_MASK, OP_T3_MASK, 2) };
+
+    const uint64_t OP_LINE4_THREATS[3] = { Make7_line4_threats(OP_T1_MASK, OP_T2_MASK, OP_T3_MASK, 0),
+                                           Make7_line4_threats(OP_T1_MASK, OP_T2_MASK, OP_T3_MASK, 1),
+                                           Make7_line4_threats(OP_T1_MASK, OP_T2_MASK, OP_T3_MASK, 2) };
+
+    const uint64_t OP_LINE5_THREATS[3] = { Make7_line5_threats(OP_T1_MASK, OP_T2_MASK, OP_T3_MASK, 0),
+                                           Make7_line5_threats(OP_T1_MASK, OP_T2_MASK, OP_T3_MASK, 1),
+                                           Make7_line5_threats(OP_T1_MASK, OP_T2_MASK, OP_T3_MASK, 2) };
+
+    const uint64_t OP_LINE6_THREATS[3] = { Make7_line6_threats(OP_T1_MASK, OP_T2_MASK, 0),
+                                           Make7_line6_threats(OP_T1_MASK, OP_T2_MASK, 1),
+                                           0 };
+
+    const uint64_t OP_LINE7_THREATS[3] = { Make7_line7_threats(OP_T1_MASK),
+                                           0,
+                                           0 };
+
+    const uint64_t DROPPABLE_MASK = (_M7->mask + MAKE7_BOT) & MAKE7_ALL;
+
+    uint8_t polyArr[MAKE7_SIZE_X3], polyCnt = 0;
+
+    for (uint8_t i = 0; i < 3; i++)
+    {
+        const uint64_t TILE_3_DROP_MASK = i == 2 ? MAKE7_THREES_MASK : MAKE7_ALL;
+
+        for (uint8_t j = 0; j < 3; j++)
+        {
+            const uint64_t TILE_DROP_MASK_B = DROPPABLE_MASK & TILE_3_DROP_MASK & (j == 2 ? MAKE7_THREES_MASK : MAKE7_ALL);
+            const uint8_t TILE_INDEX_B = j << 3;
+
+            Make7_policy_addMove(OP_LINE3_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
+            Make7_policy_addMove(OP_LINE4_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
+            Make7_policy_addMove(OP_LINE5_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
+            Make7_policy_addMove(OP_LINE6_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
+            Make7_policy_addMove(OP_LINE7_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
+        }
+    }
+
+    if (polyCnt)
+    {
+        const uint8_t POLY_MOVE = polyArr[Xoshiro128pp_nextN(&g_rng, polyCnt)];
+
+        _movChr[0] = (POLY_MOVE >> 3) + '1';
+        _movChr[1] = (POLY_MOVE & 7) + 'A';
+    }
+}
+
 //////////////////////////////////////////////////////
 /// @brief  Tests if a player has insufficient tiles.
 /// @param  _M7
@@ -540,39 +1161,14 @@ static inline int Make7_winner(const Make7 *const restrict _M7)
     return Make7_targetSum(_M7) ? (!(Make7_moves(_M7) & 1) ? 2 : 1) : -!Make7_noMoreTiles(_M7);
 }
 
-/////////////////////////////////////////////////////////
-/// @brief  Horizontal symmetry test for a Make 7 board.
-/// @param  _M7
-/// @return `true` if symmetric; otherwise `false`.
-/////////////////////////////////////////////////////////
-bool Make7_symmetric(const Make7 *const restrict _M7)
+/////////////////////////////////////////////////////////////
+/// @brief      Selects a target sum (win condition) method.
+/// @details    Exact: 2+2+3=7 => win; 2+2+2+3=9 => no win
+///             Slider: 2+2+2+3 == 2+[2+2+3] => win
+/////////////////////////////////////////////////////////////
+static inline void Make7_setTargetMethod(void)
 {
-    const uint64_t PL = _M7->side;
-    const uint64_t OP = PL ^ _M7->mask;
-    constexpr uint8_t MAKE7_MID_COL = MAKE7_SIZE / 2;
-
-    for (uint8_t c = 0; c < MAKE7_MID_COL; c++)
-    {
-        const uint8_t LEFT_COL_BIT = c * MAKE7_SIZE_P1;
-        const uint8_t RIGHT_COL_BIT = (MAKE7_SIZE_M1 - c) * MAKE7_SIZE_P1;
-
-        const uint64_t PL_COL_LEFT = (PL & (MAKE7_COL_MASK << LEFT_COL_BIT)) >> LEFT_COL_BIT;
-        const uint64_t OP_COL_LEFT = (OP & (MAKE7_COL_MASK << LEFT_COL_BIT)) >> LEFT_COL_BIT;
-        const uint64_t T1_COL_LEFT = (_M7->tile1 & (MAKE7_COL_MASK << LEFT_COL_BIT)) >> LEFT_COL_BIT;
-        const uint64_t T2_COL_LEFT = (_M7->tile2 & (MAKE7_COL_MASK << LEFT_COL_BIT)) >> LEFT_COL_BIT;
-
-        const uint64_t PL_COL_RIGHT = (PL >> RIGHT_COL_BIT) & MAKE7_COL_MASK;
-        const uint64_t OP_COL_RIGHT = (OP >> RIGHT_COL_BIT) & MAKE7_COL_MASK;
-        const uint64_t T1_COL_RIGHT = (_M7->tile1 >> RIGHT_COL_BIT) & MAKE7_COL_MASK;
-        const uint64_t T2_COL_RIGHT = (_M7->tile2 >> RIGHT_COL_BIT) & MAKE7_COL_MASK;
-
-        if (PL_COL_LEFT != PL_COL_RIGHT || OP_COL_LEFT != OP_COL_RIGHT || T1_COL_LEFT != T1_COL_RIGHT || T2_COL_LEFT != T2_COL_RIGHT)
-        {
-            return false;
-        }
-    }
-
-    return true;
+    Make7_targetSum_choice = M7_targetMethod ? Make7_targetSum_window : Make7_targetSum_exact;
 }
 
 ///////////////////////////////////////
@@ -594,6 +1190,41 @@ static inline uint64_t Make7_lock(const Make7 *const restrict _M7)
     const uint64_t LOCK_C = SplitMix64_finalize(_M7->tile2 + MAKE7_T2_SALT);
 
     return LOCK_A ^ LOCK_B ^ LOCK_C;
+}
+
+/////////////////////////////////////////////////////////
+/// @brief  Horizontal symmetry test for a Make 7 board.
+/// @param  _M7
+/// @return `true` if symmetric; otherwise `false`.
+/////////////////////////////////////////////////////////
+static inline bool Make7_symmetric(const Make7 *const restrict _M7)
+{
+    const uint64_t PL = _M7->side;
+    const uint64_t OP = PL ^ _M7->mask;
+    constexpr uint8_t MAKE7_MID_COL = MAKE7_SIZE / 2;
+
+    for (uint8_t c = 0; c < MAKE7_MID_COL; c++)
+    {
+        const uint8_t LEFT_COL_BIT = c * MAKE7_SIZE_P1;
+        const uint8_t RIGHT_COL_BIT = (MAKE7_SIZE_M1 - c) * MAKE7_SIZE_P1;
+
+        const uint64_t PL_COL_LEFT = (PL & MAKE7_COL_MASK << LEFT_COL_BIT) >> LEFT_COL_BIT;
+        const uint64_t OP_COL_LEFT = (OP & MAKE7_COL_MASK << LEFT_COL_BIT) >> LEFT_COL_BIT;
+        const uint64_t T1_COL_LEFT = (_M7->tile1 & MAKE7_COL_MASK << LEFT_COL_BIT) >> LEFT_COL_BIT;
+        const uint64_t T2_COL_LEFT = (_M7->tile2 & MAKE7_COL_MASK << LEFT_COL_BIT) >> LEFT_COL_BIT;
+
+        const uint64_t PL_COL_RIGHT = PL >> RIGHT_COL_BIT & MAKE7_COL_MASK;
+        const uint64_t OP_COL_RIGHT = OP >> RIGHT_COL_BIT & MAKE7_COL_MASK;
+        const uint64_t T1_COL_RIGHT = _M7->tile1 >> RIGHT_COL_BIT & MAKE7_COL_MASK;
+        const uint64_t T2_COL_RIGHT = _M7->tile2 >> RIGHT_COL_BIT & MAKE7_COL_MASK;
+
+        if (PL_COL_LEFT != PL_COL_RIGHT || OP_COL_LEFT != OP_COL_RIGHT || T1_COL_LEFT != T1_COL_RIGHT || T2_COL_LEFT != T2_COL_RIGHT)
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 ///////////////////////////////////////////////
@@ -642,7 +1273,7 @@ static inline bool Make7_parse(Make7 *const restrict _m7, const char _INPUT[rest
     const uint8_t TILE_TOKEN = _INPUT[0] - '1';
     const uint8_t COL_TOKEN = toupper(_INPUT[1]) - 'A';
 
-    if (TILE_TOKEN <= 2 && COL_TOKEN < MAKE7_SIZE && Make7_droppable(_m7, TILE_TOKEN, COL_TOKEN))
+    if (TILE_TOKEN <= 2 && COL_TOKEN < MAKE7_SIZE && !Make7_over(_m7) && Make7_droppable(_m7, TILE_TOKEN, COL_TOKEN))
     {
         Make7_drop(_m7, TILE_TOKEN, COL_TOKEN);
 

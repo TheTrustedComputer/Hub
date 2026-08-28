@@ -677,7 +677,7 @@ static inline void Interface_run(void)
     MCTS_funtPtrs_init();
     Xoshiro128_init(&g_rng);
 
-    char *restrict cmd, *arg, popTokens[COLS_X2 + 2], bestMove = '\0', policyMove, m7MovChr[2];
+    char *restrict cmd, *arg, popTokens[COLS_X2 + 2], bestMove = '\0', policyMove, m7MovChr[2], m7Policy[2];
     Board c4Key, ptKey; uint64_t m7Key, t1Key, t2Key; Result result; size_t i, cmdLen; long cmdCnt; int winner;
 
 #ifdef FTW_SQLITE
@@ -982,11 +982,24 @@ static inline void Interface_run(void)
                     bestMove = NegaScout_Connect4_pop10_results(&UI_c4, &UI_p10, true);
                     break;
                 case CONNECT4_MAKE7:
-                    NegaScout_Make7_results(&UI_m7, true, m7MovChr);
+                    result = NegaScout_Make7_results(&UI_m7, true, m7MovChr);
                     break;
                 }
 
-                bestMove = policyMove ? policyMove : bestMove;
+                if (UI_IS_MAKE7)
+                {
+                    if (result.wdl == LOSS_CHAR && result.dtw == 1)
+                    {
+                        Make7_policy(&UI_m7, m7Policy);
+
+                        m7MovChr[0] = m7Policy[0];
+                        m7MovChr[1] = m7Policy[1];
+                    }
+                }
+                else
+                {
+                    bestMove = policyMove ? policyMove : bestMove;
+                }
 
                 printf("Recommended move: %c%c\n", UI_IS_MAKE7 ? m7MovChr[0] : bestMove, UI_IS_MAKE7 * m7MovChr[1]);
                 putchar('\a');
@@ -1009,11 +1022,25 @@ static inline void Interface_run(void)
                         bestMove = NegaScout_Connect4_pop10_results(&UI_c4, &UI_p10, false);
                         break;
                     case CONNECT4_MAKE7:
-                        NegaScout_Make7_results(&UI_m7, false, m7MovChr);
+                        result = NegaScout_Make7_results(&UI_m7, false, m7MovChr);
                         break;
                     }
 
-                    bestMove = !UI_IS_MAKE7 && (policyMove = Connect4_policy(&UI_c4)) ? policyMove : bestMove;
+                    if (UI_IS_MAKE7)
+                    {
+                        if (result.wdl == LOSS_CHAR && result.dtw == 1)
+                        {
+                            Make7_policy(&UI_m7, m7Policy);
+
+                            m7MovChr[0] = m7Policy[0];
+                            m7MovChr[1] = m7Policy[1];
+                        }
+                    }
+                    else
+                    {
+                        policyMove = Connect4_policy(&UI_c4);
+                        bestMove = policyMove ? policyMove : bestMove;
+                    }
                 }
 
                 switch (C4_variant)
@@ -1314,7 +1341,7 @@ static inline void Interface_run(void)
         }
         else if (UI_IS_MAKE7 && REC_strcmd(cmd, "tiles"))
         {
-            printf("[1] %u [2] %u [3] %u\n", Make7_count(UI_m7.avails, UI_m7.turn, 0), Make7_count(UI_m7.avails, UI_m7.turn, 1), Make7_count(UI_m7.avails, UI_m7.turn, 2));
+            printf("[1]x%u [2]x%u [3]x%u\n", Make7_count(UI_m7.avails, UI_m7.turn, 0), Make7_count(UI_m7.avails, UI_m7.turn, 1), Make7_count(UI_m7.avails, UI_m7.turn, 2));
         }
         else if (UI_IS_MAKE7 && REC_strcmd(cmd, "tgwin"))
         {
@@ -1325,7 +1352,7 @@ static inline void Interface_run(void)
             Make7_setTargetMethod();
             printf("Win method has been set to %s.\n", M7_targetMethod ? FTW_STR_WINDOWING : FTW_STR_EXACT);
 
-            showWinMsg = false;
+            showWinMsg = solved = false;
         }
         else if (isdigit(*cmd) || (UI_IS_POPOUT_OR_POP10 && strpbrk(cmd, popTokens)))
         {

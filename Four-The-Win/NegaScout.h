@@ -1344,7 +1344,7 @@ static inline char NegaScout_Connect4_pop10_results(Connect4 *const restrict _c4
 /// @param  _PRINT
 /// @param  _mov
 ////////////////////////////////////////////////////
-static inline void NegaScout_Make7_results(const Make7 *const restrict _M7, const bool _PRINT, char _mov[const restrict static 2])
+static inline Result NegaScout_Make7_results(const Make7 *const restrict _M7, const bool _PRINT, char _mov[const restrict static 2])
 {
     Result m7Res[MAKE7_SIZE_X3], *restrict res; uint8_t i, j;
 
@@ -1471,6 +1471,8 @@ static inline void NegaScout_Make7_results(const Make7 *const restrict _M7, cons
         _mov[0] = (BEST_MOV >> 3) + '1';
         _mov[1] = (BEST_MOV & 7) + 'A';
     }
+
+    return M7_BEST;
 }
 
 //////////////////////////////////////////////////////////////////////

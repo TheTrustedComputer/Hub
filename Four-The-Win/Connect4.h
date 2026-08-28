@@ -188,7 +188,7 @@ static void (*Connect4_generate)(const Connect4 *const restrict, uint8_t[restric
 static void (*Connect4_generateAll)(const Connect4 *const restrict, uint8_t[restrict static 1], uint8_t *const restrict);
 static void (*Connect4_genNonLosing)(const Connect4 *const restrict, uint8_t[restrict static 1], uint8_t *const restrict);
 static bool (*Connect4_fourInARow)(const Board);
-static Board (*Connect4_fourInARow_threats)(const Board, const Board);
+static Board (*Connect4_fourInARow_threats)(const Board);
 static bool (*Connect4_over)(const Connect4 *const restrict);
 static bool (*Connect4_canWin)(const Connect4 *const restrict);
 static char (*Connect4_policy)(const Connect4 *const restrict);
@@ -878,12 +878,11 @@ static inline Board Connect4_pop10_fourInARow(const Board _S, const Board _T)
 
 ///////////////////////////////////////////////////////////////
 /// @brief      Masks every open-ended three-in-a-row threats.
-/// @param  _M  Bitboard of all pieces on the board.
 /// @param  _S  Bitboard of the side or player owned pieces.
 /// @return     Bitboard of potential winnning/blocking moves.
 /// @attention  Also retrieves unreachable floating bits.
 ///////////////////////////////////////////////////////////////
-static inline Board Connect4_original_fourInARow_threats(const Board _M, const Board _S)
+static inline Board Connect4_original_fourInARow_threats(const Board _S)
 {
     // Vertical
     Board m = _S << 1 & _S << 2 & _S << 3;
@@ -906,15 +905,14 @@ static inline Board Connect4_original_fourInARow_threats(const Board _M, const B
     n >>= ROWS_P2_X3;
     m |= (n & _S << ROWS_P2) | (n & _S >> ROWS_P2_X3);
 
-    return m & (_M ^ ALL_MASK);
+    return m; // We AND with a drop mask later, so `m & ~mask & ALL_MASK` does nothing
 }
 
 ////////////////////////////////////////////////////////////////////////
 /// @brief  The cylindrical version of `Connect4_fourInARow_threats()`.
-/// @param  _M
 /// @param  _S
 ////////////////////////////////////////////////////////////////////////
-static inline Board Connect4_cylinder_fourInARow_threats(const Board _M, const Board _S)
+static inline Board Connect4_cylinder_fourInARow_threats(const Board _S)
 {
     const uint8_t CM1_X_RP1 = ROWS_P1 * COLS_M1;
     const uint8_t CM2_X_RP1 = ROWS_P1 * COLS_M2;
@@ -963,7 +961,7 @@ static inline Board Connect4_cylinder_fourInARow_threats(const Board _M, const B
     m |= _S >> CM1_X_RP1_M1 & _S >> ROWS_P2 & _S >> ROWS_P2_X2;
     m |= _S << CM1_X_RP1_M1 & _S << CM2_X_RP1_M2 & _S << CM3_X_RP1_M3;
 
-    return Connect4_original_fourInARow_threats(_M, _S) | (m & (_M ^ ALL_MASK));
+    return m | Connect4_original_fourInARow_threats(_S);
 }
 
 ///////////////////////////////////////////////////
@@ -1372,8 +1370,8 @@ static inline void Connect4_original_generate(const Connect4 *const restrict _C4
 {
     Board dropMask = (_C4->mask + BOT_MASK) & ALL_MASK; *_num = 0;
 
-    const Board PL_THREATS = Connect4_fourInARow_threats(_C4->mask, _C4->side) & dropMask;
-    const Board OP_THREATS = Connect4_fourInARow_threats(_C4->mask, _C4->side ^ _C4->mask) & dropMask;
+    const Board PL_THREATS = Connect4_fourInARow_threats(_C4->side) & dropMask;
+    const Board OP_THREATS = Connect4_fourInARow_threats(_C4->side ^ _C4->mask) & dropMask;
 
     dropMask = PL_THREATS ? PL_THREATS : (OP_THREATS ? OP_THREATS : dropMask);
 
@@ -1390,7 +1388,7 @@ static inline void Connect4_misere_generate(const Connect4 *const restrict _C4, 
 {
     Board dropMask = (_C4->mask + BOT_MASK) & ALL_MASK; *_num = 0;
 
-    const Board PL_THREATS = Connect4_fourInARow_threats(_C4->mask, _C4->side) & dropMask;
+    const Board PL_THREATS = Connect4_fourInARow_threats(_C4->side) & dropMask;
 
     dropMask = PL_THREATS && PL_THREATS != dropMask ? dropMask ^ PL_THREATS : dropMask;
 
@@ -1462,7 +1460,7 @@ static inline void Connect4_popout_generateAll(const Connect4 *const restrict _C
 static inline void Connect4_original_genNonLosing(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
 {
     Board dropMask = (_C4->mask + BOT_MASK) & ALL_MASK; *_num = 0;
-    Board opThreats = Connect4_fourInARow_threats(_C4->mask, _C4->side ^ _C4->mask) & dropMask;
+    Board opThreats = Connect4_fourInARow_threats(_C4->side ^ _C4->mask) & dropMask;
 
 #if FTW_C4_MAX_BITS > 64 // cannot avoid losing; limit to 1 branch
     Connect4_popcnt(opThreats) > 1 ? (opThreats &= opThreats - 1) : FTW_VOID_NOP;
@@ -1485,7 +1483,7 @@ static inline void Connect4_misere_genNonLosing(const Connect4 *const restrict _
 {
     Board dropMask = (_C4->mask + BOT_MASK) & ALL_MASK; *_num = 0;
 
-    const Board PL_THREATS = Connect4_fourInARow_threats(_C4->mask, _C4->side) & dropMask;
+    const Board PL_THREATS = Connect4_fourInARow_threats(_C4->side) & dropMask;
 
     dropMask = PL_THREATS ? dropMask ^ PL_THREATS : dropMask;
 
@@ -1522,8 +1520,8 @@ static inline char Connect4_noMovePolicy(const Connect4 *const restrict _C4)
 static inline char Connect4_original_policy(const Connect4 *const restrict _C4)
 {
     const Board DROP_MASK = (_C4->mask + BOT_MASK) & ALL_MASK;
-    const Board PL_THREATS = Connect4_fourInARow_threats(_C4->mask, _C4->side) & DROP_MASK;
-    const Board OP_THREATS = Connect4_fourInARow_threats(_C4->mask, _C4->side ^ _C4->mask) & DROP_MASK;
+    const Board PL_THREATS = Connect4_fourInARow_threats(_C4->side) & DROP_MASK;
+    const Board OP_THREATS = Connect4_fourInARow_threats(_C4->side ^ _C4->mask) & DROP_MASK;
 
     uint8_t policies[MOVE_BOUNDS];
     uint8_t polyCnt = 0;
@@ -1557,7 +1555,7 @@ static inline char Connect4_popout_policy(const Connect4 *const restrict _C4)
     uint8_t policies[MOVE_BOUNDS];
     uint8_t polyCnt = 0;
 
-    Connect4_original_genMoveBody(Connect4_fourInARow_threats(_C4->mask, _C4->side) & (_C4->mask + BOT_MASK) & ALL_MASK, policies, &polyCnt);
+    Connect4_original_genMoveBody(Connect4_fourInARow_threats(_C4->side) & (_C4->mask + BOT_MASK) & ALL_MASK, policies, &polyCnt);
 
     for (Board sideBotMask = _C4->side & BOT_MASK; sideBotMask; sideBotMask &= sideBotMask - 1)
     {
@@ -1927,11 +1925,11 @@ static inline bool Connect4_symmetric(const Connect4 *const restrict _C4)
         const uint8_t L_COL_BIT = ROWS_P1 * i;
         const uint8_t R_COL_BIT = ROWS_P1 * (COLS_M1 - i);
 
-        const Board PL_COL_LEFT = (PL & (COL_MASK << L_COL_BIT)) >> L_COL_BIT;
-        const Board OP_COL_LEFT = (OP & (COL_MASK << L_COL_BIT)) >> L_COL_BIT;
+        const Board PL_COL_LEFT = (PL & COL_MASK << L_COL_BIT) >> L_COL_BIT;
+        const Board OP_COL_LEFT = (OP & COL_MASK << L_COL_BIT) >> L_COL_BIT;
 
-        const Board PL_COL_RIGHT = (PL >> R_COL_BIT) & COL_MASK;
-        const Board OP_COL_RIGHT = (OP >> R_COL_BIT) & COL_MASK;
+        const Board PL_COL_RIGHT = PL >> R_COL_BIT & COL_MASK;
+        const Board OP_COL_RIGHT = OP >> R_COL_BIT & COL_MASK;
 
         if (PL_COL_LEFT != PL_COL_RIGHT || OP_COL_LEFT != OP_COL_RIGHT)
         {

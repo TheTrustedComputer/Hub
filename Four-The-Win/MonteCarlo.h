@@ -39,8 +39,8 @@ typedef struct MCTSNode
     struct MCTSNode *restrict ancestor;
     struct MCTSNode *restrict *restrict descendants;
     uint64_t key; double visits, score;
-    uint8_t move, count, /*nones, index; */ turn;
-    MCTSWDL wdl; uint32_t _; // alignment to 8-byte words in 64-bit systems
+    uint8_t move, count, /*nones, index; */ depth, turn;
+    MCTSWDL wdl;
 }
 MCTSNode;
 
@@ -66,7 +66,7 @@ typedef struct MCTSResult
     const MCTSWDL *restrict wdl;
     const unsigned long long *restrict trials;
     unsigned long long *restrict secs;
-    double reward; uint8_t move;
+    double reward; uint8_t *restrict depth, move;
 }
 MCTSResult;
 
@@ -184,6 +184,23 @@ static inline void MCTSTable_destroy(MCTSTable *const restrict _mt)
     REC_free(_mt->bucket);
 }
 
+////////////////////////////////////////////////
+/// @brief  Has a node reached its depth limit?
+/// @param  _node
+/// @return `true` if yes; otherwise `false`.
+////////////////////////////////////////////////
+static inline bool MCTSNode_depthLimit(MCTSNode *const restrict _node)
+{
+    if (_node->depth == UINT8_MAX)
+    {
+        _node->wdl = MCTS_DRAW;
+
+        return true;
+    }
+
+    return false;
+}
+
 ////////////////////////////////////////////////////////
 /// @brief  Evaluates a Connect 4 node for termination.
 /// @param  _node
@@ -253,7 +270,7 @@ static inline bool MCTSNode_Connect4_popout_evaluate(MCTSNode *const restrict _n
         return true;
     }
 
-    return false;
+    return FTW_BRANCH_COLD(MCTSNode_depthLimit(_node));
 }
 
 ///////////////////////////////////////////////////////////////
@@ -270,7 +287,7 @@ static inline bool MCTSNode_Connect4_pop10_evaluate(MCTSNode *const restrict _no
         return true;
     }
 
-    return false;
+    return FTW_BRANCH_COLD(MCTSNode_depthLimit(_node));
 }
 
 ////////////////////////////////////////////////////////
@@ -321,6 +338,7 @@ static inline void MCTSNode_init(MCTSNode *const restrict _node, MCTSNode *const
     _node->descendants = nullptr;
     _node->visits = _node->score = 0.0;
     _node->count = /*_node->nones =*/ 0;
+    _node->depth = _ancest ? _ancest->depth + 1 : 0;
     _node->wdl = MCTS_NONE;
 }
 
@@ -813,6 +831,7 @@ static inline MCTSNode *MCTSNode_mostRobust(MCTSNode *const restrict _node)
 ///////////////////////////////////////////////////////////////////////////////
 /// @brief  Prints the running status of Monte Carlo Tree Search on Connect 4.
 /// @param  _RES
+/// @note   <move> <reward> <depth> <visits> <visits/sec> <secs>
 ///////////////////////////////////////////////////////////////////////////////
 static inline void MCTSResult_print(const MCTSResult *const restrict _RES)
 {
@@ -836,16 +855,16 @@ static inline void MCTSResult_print(const MCTSResult *const restrict _RES)
     switch (*_RES->wdl)
     {
     case MCTS_WIN:
-        printf("\r\e[1;92m%c%c %s\e[0m %llu %llu %llu        ", M_NOTE_A, M_NOTE_B, FTW_STR_WIN, *_RES->trials, M_SPEED, *_RES->secs);
+        printf("\r\e[1;92m%c%c %s\e[0m %u %llu %llu %llu        ", M_NOTE_A, M_NOTE_B, FTW_STR_WIN, *_RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
         break;
     case MCTS_DRAW:
-        printf("\r\e[1;93m%c%c %s\e[0m %llu %llu %llu        ", M_NOTE_A, M_NOTE_B, FTW_STR_DRAW, *_RES->trials, M_SPEED, *_RES->secs);
+        printf("\r\e[1;93m%c%c %s\e[0m %u %llu %llu %llu        ", M_NOTE_A, M_NOTE_B, FTW_STR_DRAW, *_RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
         break;
     case MCTS_LOSS:
-        printf("\r\e[1;91m%c%c %s\e[0m %llu %llu %llu        ", M_NOTE_A, M_NOTE_B, FTW_STR_LOSS, *_RES->trials, M_SPEED, *_RES->secs);
+        printf("\r\e[1;91m%c%c %s\e[0m %u %llu %llu %llu        ", M_NOTE_A, M_NOTE_B, FTW_STR_LOSS, *_RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
         break;
     default:
-        printf("\r\e[1m%c%c\e[0m %.3f %llu %llu %llu ", M_NOTE_A, M_NOTE_B, _RES->reward, *_RES->trials, M_SPEED, *_RES->secs);
+        printf("\r\e[1m%c%c\e[0m %.3f %u %llu %llu %llu ", M_NOTE_A, M_NOTE_B, _RES->reward, *_RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
         fflush(stdout);
         break;
     }
@@ -979,7 +998,7 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
 
     unsigned long long secs;
 
-    MCTSResult result = (MCTSResult)
+    MCTSResult mctsRes = (MCTSResult)
     {
         .root = &rootNode,
         .wdl = &rootNode.wdl,
@@ -989,7 +1008,7 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
 
     thrd_t progThrd;
 
-    REC_thrd_create(&progThrd, MCTSResult_thread, &result, "Could not create the MCTS progress thread.", true);
+    REC_thrd_create(&progThrd, MCTSResult_thread, &mctsRes, "Could not create the MCTS progress thread.", true);
 
     for (MCTS_trials = secs = 0; atomic_load_explicit(&MCTS_run, memory_order_relaxed) && rootNode.wdl == MCTS_NONE; MCTS_trials++)
     {
@@ -1006,7 +1025,7 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
             MCTS_POP10 ? Connect4_pop10_play(&mctsC4, &mctsP10, leaf->move) : Connect4_play(&mctsC4, leaf->move);
         }
 
-        double reward;
+        double reward; mctsRes.depth = &leaf->depth;
 
         switch (leaf->wdl)
         {
@@ -1041,8 +1060,8 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
 
     const MCTSNode *const restrict bestNode = MCTSNode_mostRobust(&rootNode);
 
-    result.move = bestNode->move;
-    *result.wdl != MCTS_NONE ? MCTSResult_print(&result) : FTW_VOID_NOP;
+    mctsRes.move = bestNode->move;
+    *mctsRes.wdl != MCTS_NONE ? MCTSResult_print(&mctsRes) : FTW_VOID_NOP;
     putchar('\n');
 
     atomic_store_explicit(&MCTS_run, false, memory_order_relaxed);
@@ -1051,7 +1070,7 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
     MCTSTable_destroy(&MCTS_table);
     MemoryPool_destroy(&MCTS_nodePool);
     MemoryPool_destroy(&MCTS_entryPool);
-    Connect4_destroy(&mctsC4);
+    !MCTS_MAKE7 ? Connect4_destroy(&mctsC4) : FTW_VOID_NOP;
     REC_free(MCTS_termNodes);
     REC_free(MCTS_movArr);
     signal(SIGINT, SIG_DFL);
