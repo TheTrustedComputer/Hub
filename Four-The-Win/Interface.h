@@ -988,10 +988,8 @@ static inline void Interface_run(void)
 
                 if (UI_IS_MAKE7)
                 {
-                    if (result.wdl == LOSS_CHAR && result.dtw == 1)
+                    if (result.wdl == LOSS_CHAR && result.dtw == 1 && Make7_policy(&UI_m7, m7Policy))
                     {
-                        Make7_policy(&UI_m7, m7Policy);
-
                         m7MovChr[0] = m7Policy[0];
                         m7MovChr[1] = m7Policy[1];
                     }
@@ -1028,10 +1026,8 @@ static inline void Interface_run(void)
 
                     if (UI_IS_MAKE7)
                     {
-                        if (result.wdl == LOSS_CHAR && result.dtw == 1)
+                        if (result.wdl == LOSS_CHAR && result.dtw == 1 && Make7_policy(&UI_m7, m7Policy))
                         {
-                            Make7_policy(&UI_m7, m7Policy);
-
                             m7MovChr[0] = m7Policy[0];
                             m7MovChr[1] = m7Policy[1];
                         }
@@ -1336,7 +1332,7 @@ static inline void Interface_run(void)
 
             if (perftNotFinal)
             {
-                printf("%s perft <depth 0-999>\n", FTW_STR_USAGE);
+                printf("%s perft <depth [0-999]>\n", FTW_STR_USAGE);
             }
         }
         else if (UI_IS_MAKE7 && REC_strcmd(cmd, "tiles"))

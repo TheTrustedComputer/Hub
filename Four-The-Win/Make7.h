@@ -1070,8 +1070,9 @@ static inline void Make7_policy_addMove(uint64_t _bitPos, const uint8_t _T_INDEX
 /// @param  _M7
 /// @param  _movChr
 /// @note   Humanizes loss-in-1 moves (prefer blocking a sum over allowing it).
+/// @return `true` if such a move exists; otherwise `false`.
 ////////////////////////////////////////////////////////////////////////////////
-static inline void Make7_policy(const Make7 *const restrict _M7, char _movChr[const restrict static 2])
+static inline bool Make7_policy(const Make7 *const restrict _M7, char _movChr[const restrict static 2])
 {
     const uint64_t ALL_T3_MASK = _M7->mask ^ (_M7->tile1 | _M7->tile2);
     const uint64_t OP_SIDE = _M7->side ^ _M7->mask;
@@ -1099,6 +1100,7 @@ static inline void Make7_policy(const Make7 *const restrict _M7, char _movChr[co
                                            0,
                                            0 };
 
+    const uint8_t OFF_TILES[3] = { Make7_count(_M7->avails, _M7->turn, 0), Make7_count(_M7->avails, _M7->turn, 1), Make7_count(_M7->avails, _M7->turn, 2) };
     const uint64_t DROPPABLE_MASK = (_M7->mask + MAKE7_BOT) & MAKE7_ALL;
 
     uint8_t polyArr[MAKE7_SIZE_X3], polyCnt = 0;
@@ -1112,11 +1114,14 @@ static inline void Make7_policy(const Make7 *const restrict _M7, char _movChr[co
             const uint64_t TILE_DROP_MASK_B = DROPPABLE_MASK & TILE_3_DROP_MASK & (j == 2 ? MAKE7_THREES_MASK : MAKE7_ALL);
             const uint8_t TILE_INDEX_B = j << 3;
 
-            Make7_policy_addMove(OP_LINE3_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
-            Make7_policy_addMove(OP_LINE4_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
-            Make7_policy_addMove(OP_LINE5_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
-            Make7_policy_addMove(OP_LINE6_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
-            Make7_policy_addMove(OP_LINE7_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
+            if (OFF_TILES[i])
+            {
+                Make7_policy_addMove(OP_LINE3_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
+                Make7_policy_addMove(OP_LINE4_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
+                Make7_policy_addMove(OP_LINE5_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
+                Make7_policy_addMove(OP_LINE6_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
+                Make7_policy_addMove(OP_LINE7_THREATS[i] & TILE_DROP_MASK_B, TILE_INDEX_B, polyArr, &polyCnt);
+            }
         }
     }
 
@@ -1126,7 +1131,11 @@ static inline void Make7_policy(const Make7 *const restrict _M7, char _movChr[co
 
         _movChr[0] = (POLY_MOVE >> 3) + '1';
         _movChr[1] = (POLY_MOVE & 7) + 'A';
+
+        return true;
     }
+
+    return false;
 }
 
 //////////////////////////////////////////////////////
