@@ -642,6 +642,7 @@ static inline Result NegaScout_Connect4_popout_iterative(Connect4 *const restric
 
     const uint16_t POP_DEPTH = BOARD_AREA < 128 ? UINT8_MAX : NS_MAX_DEPTH;
     const uint16_t DEPTH = _c4->plies > POP_DEPTH ? _c4->plies : POP_DEPTH;
+    constexpr int16_t POP_BOUND = NS_PROG + 1;
 
     // uint64_t nodePrev = 0, nodeDelta = 0; int16_t val = NS_DRAW;
     int16_t val = NS_DRAW, vals[2] = { -NS_PROG, NS_PROG };
@@ -654,7 +655,7 @@ static inline Result NegaScout_Connect4_popout_iterative(Connect4 *const restric
     {
         _PRINT ? printf(FTW_STR_SOLVING_INFINITE, i), fflush(stdout) : FTW_VOID_NOP;
 
-        if (abs((val = NegaScout_Connect4_search(_c4, i, -NS_PROG, NS_PROG))) >= NS_WIN_THR)
+        if (abs((val = NegaScout_Connect4_search(_c4, i, -POP_BOUND, POP_BOUND))) >= NS_WIN_THR)
         {
             goto NegaScout_Connect4_popout_iterative_solved;
         }
@@ -700,6 +701,7 @@ static inline Result NegaScout_Connect4_pop10_iterative(Connect4 *const restrict
     NS_nodes = 0;
 
     const uint16_t DEPTH = _c4->plies > NS_MAX_DEPTH ? _c4->plies : NS_MAX_DEPTH;
+    constexpr int16_t POP_BOUND = NS_PROG + 1;
 
     //uint64_t nodePrev = 0, nodeDelta = 0; int16_t val = NS_DRAW;
     int16_t val = NS_DRAW, vals[2] = { -NS_PROG, NS_PROG };
@@ -717,7 +719,7 @@ static inline Result NegaScout_Connect4_pop10_iterative(Connect4 *const restrict
     {
         _PRINT ? printf(FTW_STR_SOLVING_INFINITE, i), fflush(stdout) : FTW_VOID_NOP;
 
-        if (abs((val = NegaScout_Connect4_pop10_search(_c4, _p10, i, -NS_PROG, NS_PROG))) >= NS_WIN_THR)
+        if (abs((val = NegaScout_Connect4_pop10_search(_c4, _p10, i, -POP_BOUND, POP_BOUND))) >= NS_WIN_THR)
         {
             goto NegaScout_Connect4_pop10_iterative_solved;
         }

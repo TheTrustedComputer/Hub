@@ -174,7 +174,13 @@ Connect4_Pop10;
 #define Connect4_popMask(_side) _side & BOT_MASK
 
 static constexpr uint8_t POP10_4ROW = 0x80;             // Marker for a disk that was part of a four-in-a-row
+
+#ifdef FTW_DEBUG
+static constexpr uint8_t POP10_TGT = 4;
+#else
 static constexpr uint8_t POP10_TGT = 10;                // Number of stockpiled disks required to win
+#endif
+
 static constexpr uint8_t POP10_TGT_M1 = POP10_TGT - 1;  // One less than the target number of disks
 static constexpr char POP10_PASS_CHR = '#';             // Character representation of a passing move
 
