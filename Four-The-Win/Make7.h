@@ -81,8 +81,18 @@ static constexpr uint64_t ADJ_BITMASK_TABLE[55] = { 0x302ull, 0x705ull, 0xe0aull
                                                     0x3020300000000ull, 0x7050700000000ull, 0xe0a0e00000000ull, 0x1c141c00000000ull, 0x38283800000000ull, 0x70507000000000ull, 0x60206000000000ull, 0x0ull,
                                                     0x302030000000000ull, 0x705070000000000ull, 0xe0a0e0000000000ull, 0x1c141c0000000000ull, 0x3828380000000000ull, 0x7050700000000000ull, 0x6020600000000000ull };
 
-static uint64_t MAKE7_SM_SALT, MAKE7_T1_SALT, MAKE7_T2_SALT;
-static bool M7_targetMethod, (*Make7_targetSum_choice)(const uint64_t, const uint64_t, const uint64_t, const uint64_t, const uint8_t);
+#ifdef FTW_XXHASH
+    static uint64_t MAKE7_XXHSEED;
+#else
+    static uint64_t MAKE7_SM_SALT;
+#ifndef FTW_TT_128_BITS
+    static uint64_t MAKE7_T1_SALT, MAKE7_T2_SALT;
+#endif
+#endif
+
+static bool M7_targetMode, (*Make7_targetSum_choice)(const uint64_t, const uint64_t, const uint64_t, const uint64_t, const uint8_t);
+
+#define Make7_offTileCounts(_M7) { Make7_count(_M7->avails, _M7->turn, 0), Make7_count(_M7->avails, _M7->turn, 1), Make7_count(_M7->avails, _M7->turn, 2) }
 
 #pragma pack(push, 1)
 
@@ -104,9 +114,9 @@ Make7;
 
 /////////////////////////////////////////////////////////////
 /// @brief          Obtains the off tile count for a player.
-/// @param _AVALS   Availability bitfield.
-/// @param _TURN    Current player turn.
-/// @param _TILE    Tile value, minus 1.
+/// @param  _AVALS  Availability bitfield.
+/// @param  _TURN   Current player turn.
+/// @param  _TILE   Tile value, minus 1.
 /////////////////////////////////////////////////////////////
 static inline uint8_t Make7_count(const uint32_t _AVALS, const bool _TURN, const uint8_t _TILE)
 {
@@ -176,9 +186,15 @@ static inline void Make7_init(Make7 *const restrict _m7)
 
     Xoshiro256 xsr256; Xoshiro256_init(&xsr256);
 
+#ifdef FTW_XXHASH
+    MAKE7_XXHSEED = Xoshiro256ss_next(&xsr256);
+#else
     MAKE7_SM_SALT = Xoshiro256ss_next(&xsr256);
+#ifndef FTW_TT_128_BITS
     MAKE7_T1_SALT = Xoshiro256ss_next(&xsr256);
     MAKE7_T2_SALT = Xoshiro256ss_next(&xsr256);
+#endif
+#endif
 
     Make7_reset(_m7);
 }
@@ -268,35 +284,6 @@ static inline void Make7_drop(Make7 *const restrict _m7, const uint8_t _TILE, co
     _m7->turn ^= 1;
 }
 
-////////////////////////////////////////////////////////////
-/// @brief      Adaption of `Connect4_append()` for Make 7.
-/// @param _arr Move array.
-/// @param _num Move count.
-/// @param _MOV Move to add.
-/// @param _POS Array position.
-////////////////////////////////////////////////////////////
-static inline void Make7_append(uint8_t _arr[restrict static 1], uint8_t *const restrict _num, const uint8_t _MOV, const uint8_t _POS)
-{
-    _arr[(*_num)++] = _MOV;
-
-    for (uint8_t i = *_num - _POS; --i;)
-    {
-        uint8_t *const restrict curr = &_arr[i + _POS], *const restrict prev = curr - 1;
-
-        if (MAKE7_REV_ORDER[*curr] < MAKE7_REV_ORDER[*prev])
-        {
-            const uint8_t SWAP = *curr;
-
-            *curr = *prev;
-            *prev = SWAP;
-        }
-        else
-        {
-            return;
-        }
-    }
-}
-
 //////////////////////////////////////////////////////////////////////////////
 /// @brief          Does the entire maximal run of tiles meet the target sum?
 /// @param  _P_T1   Bitmap of player tiles of value 1.
@@ -382,17 +369,19 @@ static inline bool Make7_targetSum_window(const uint64_t _P_T1, const uint64_t _
 static inline bool Make7_targetSum(const Make7 *const restrict _M7)
 {
     const uint64_t PLAYER_ALL_BITMASK = _M7->side ^ _M7->mask;
-    const uint64_t PLAYER_ONES_BITMASK = PLAYER_ALL_BITMASK & _M7->tile1;
-    const uint64_t PLAYER_TWOS_BITMASK = PLAYER_ALL_BITMASK & _M7->tile2;
-    const uint64_t PLAYER_THREES_BITMASK = PLAYER_ALL_BITMASK ^ (PLAYER_ONES_BITMASK | PLAYER_TWOS_BITMASK);
-    const uint64_t NONLAST_TILE_BITMASK = PLAYER_ALL_BITMASK ^ _M7->lastCol;
     const uint8_t LAST_DROP_TILE_INDEX = stdc_trailing_zeros_ull(_M7->lastCol);
 
-    if ((LAST_DROP_TILE_INDEX != 64) && (NONLAST_TILE_BITMASK & ADJ_BITMASK_TABLE[LAST_DROP_TILE_INDEX]))
+    if ((LAST_DROP_TILE_INDEX != 64) && (PLAYER_ALL_BITMASK & ADJ_BITMASK_TABLE[LAST_DROP_TILE_INDEX]))
     {
+        const uint64_t NONLAST_TILE_BITMASK = PLAYER_ALL_BITMASK ^ _M7->lastCol;
+
         uint64_t tileMask = NONLAST_TILE_BITMASK, tileRun = _M7->lastCol; uint8_t tileCnt = 1;
 
         for (; tileMask & _M7->lastCol >> 1; tileMask &= tileMask << 1, tileCnt++, tileRun |= tileRun >> 1); // Vertical
+
+        const uint64_t PLAYER_ONES_BITMASK = PLAYER_ALL_BITMASK & _M7->tile1;
+        const uint64_t PLAYER_TWOS_BITMASK = PLAYER_ALL_BITMASK & _M7->tile2;
+        const uint64_t PLAYER_THREES_BITMASK = PLAYER_ALL_BITMASK ^ (PLAYER_ONES_BITMASK | PLAYER_TWOS_BITMASK);
 
         if (tileCnt >= 3 && Make7_targetSum_choice(PLAYER_ONES_BITMASK, PLAYER_TWOS_BITMASK, PLAYER_THREES_BITMASK, tileRun, 1))
         {
@@ -431,9 +420,7 @@ static inline bool Make7_targetSum(const Make7 *const restrict _M7)
 //////////////////////////////////////////////////////
 static inline bool Make7_canWin(const Make7 *const restrict _M7)
 {
-    const uint8_t OFF_TILES[3] = { Make7_count(_M7->avails, _M7->turn, 0), Make7_count(_M7->avails, _M7->turn, 1), Make7_count(_M7->avails, _M7->turn, 2) };
-
-    Make7 check7 = *_M7;
+    const uint8_t OFF_TILES[3] = Make7_offTileCounts(_M7);
 
 #ifdef __clang__
     #pragma clang loop unroll(enable)
@@ -442,23 +429,53 @@ static inline bool Make7_canWin(const Make7 *const restrict _M7)
 #endif
     for (uint8_t tileIndex = 3; tileIndex--;)
     {
-        for (uint64_t open12Mask = (_M7->mask + MAKE7_BOT) & MAKE7_ALL & (tileIndex == 2 ? MAKE7_THREES_MASK : MAKE7_ALL); open12Mask && OFF_TILES[tileIndex];)
+        for (uint64_t open12Mask = Connect4_dropMask(_M7->mask, MAKE7_BOT, tileIndex == 2 ? MAKE7_THREES_MASK : MAKE7_ALL); open12Mask && OFF_TILES[tileIndex];)
         {
             const uint64_t TILE_MASK = open12Mask & -open12Mask;
 
-            Make7_drop(&check7, tileIndex, stdc_trailing_zeros_ull(TILE_MASK) >> 3);
+            Make7 checkM7 = *_M7;
 
-            if (Make7_targetSum(&check7))
+            Make7_drop(&checkM7, tileIndex, stdc_trailing_zeros_ull(TILE_MASK) >> 3);
+
+            if (Make7_targetSum(&checkM7))
             {
                 return true;
             }
 
-            check7 = *_M7;
             open12Mask ^= TILE_MASK;
         }
     }
 
     return false;
+}
+
+////////////////////////////////////////////////////////////////////
+/// @brief          Appends and sorts a Make 7 move into the array.
+/// @param  _arr    Move array.
+/// @param  _num    Move count.
+/// @param  _MOV    Move to add.
+/// @param  _POS    Array position.
+////////////////////////////////////////////////////////////////////
+static inline void Make7_append(uint8_t _arr[restrict static MAKE7_SIZE_X3], uint8_t *const restrict _num, const uint8_t _MOV, const uint8_t _POS)
+{
+    _arr[(*_num)++] = _MOV;
+
+    for (uint8_t i = *_num - _POS; --i;)
+    {
+        uint8_t *const restrict curr = &_arr[i + _POS], *const restrict prev = curr - 1;
+
+        if (MAKE7_REV_ORDER[*curr] < MAKE7_REV_ORDER[*prev])
+        {
+            const uint8_t SWAP = *curr;
+
+            *curr = *prev;
+            *prev = SWAP;
+        }
+        else
+        {
+            return;
+        }
+    }
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -467,10 +484,10 @@ static inline bool Make7_canWin(const Make7 *const restrict _M7)
 /// @param  _arr
 /// @param  _num
 //////////////////////////////////////////////////////////////////////
-static inline void Make7_generate(const Make7 *const restrict _M7, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+static inline void Make7_generate(const Make7 *const restrict _M7, uint8_t _arr[restrict static MAKE7_SIZE_X3], uint8_t *const restrict _num)
 {
-    const uint8_t OFF_TILES[3] = { Make7_count(_M7->avails, _M7->turn, 0), Make7_count(_M7->avails, _M7->turn, 1), Make7_count(_M7->avails, _M7->turn, 2) };
-    const uint64_t DROP_COL_MASK = (_M7->mask + MAKE7_BOT) & MAKE7_ALL;
+    const uint8_t OFF_TILES[3] = Make7_offTileCounts(_M7);
+    const uint64_t DROP_COL_MASK = Connect4_dropMask(_M7->mask, MAKE7_BOT, MAKE7_ALL);
 
     uint64_t tileColMask = DROP_COL_MASK & MAKE7_THREES_MASK;
     uint8_t tilePosition = 0; *_num = 0;
@@ -498,52 +515,80 @@ static inline void Make7_generate(const Make7 *const restrict _M7, uint8_t _arr[
     }
 }
 
-/*static inline void Make7_generate(const Make7 *const restrict _M7, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+//////////////////////////////////////////////////////
+/// @brief  Tests if a player has insufficient tiles.
+/// @param  _M7
+//////////////////////////////////////////////////////
+static inline bool Make7_noMoreTiles(const Make7 *const restrict _M7)
 {
-    const uint8_t OFF_TILES[3] = { Make7_count(_M7->avails, _M7->turn, 0), Make7_count(_M7->avails, _M7->turn, 1), Make7_count(_M7->avails, _M7->turn, 2) };
-    const uint64_t OP_SIDE = _M7->side ^ _M7->mask;
-    const uint64_t OP_THREATS[3] = { Make7_sumThreats(OP_SIDE, _M7->mask, _M7->tile1, _M7->tile2, 0),
-                                     Make7_sumThreats(OP_SIDE, _M7->mask, _M7->tile1, _M7->tile2, 1),
-                                     Make7_sumThreats(OP_SIDE, _M7->mask, _M7->tile1, _M7->tile2, 2) };
+    const uint8_t OFF_TILES[3] = Make7_offTileCounts(_M7);
 
-    uint64_t dropColMask = (_M7->mask + MAKE7_BOT) & MAKE7_ALL;
-    uint64_t tileColMask = dropColMask & MAKE7_THREES_MASK;
-    uint8_t tileIndex, tilePosition = 0; *_num = 0;
+    // Do they (players) have 1 and 2 tiles left?
+    // Yes: Play it through until the latter condition is met.
+    // No: Does the grid state allow droppable 3 tiles? If so, they have a move.
+    return !(OFF_TILES[0] || OFF_TILES[1] || (OFF_TILES[2] && ((_M7->mask + MAKE7_BOT) & MAKE7_THREES_MASK)));
+}
 
-    for (tileIndex = 0; tileIndex < 3; tileIndex++)
-    {
-        const uint64_t THREAT_MASK = OP_THREATS[tileIndex] & dropColMask & (tileIndex == 2 ? MAKE7_THREES_MASK : MAKE7_ALL);
+///////////////////////////////////////////////////////////////
+/// @brief  Returns the Make 7 64-bit partial key.
+/// @note   Full key is 105 bits: (side + mask, tile1, tile2).
+///////////////////////////////////////////////////////////////
+static inline uint64_t Make7_partKey(const Make7 *const restrict _M7)
+{
+    return _M7->side + _M7->mask;
+}
 
-        if (THREAT_MASK)
-        {
-            tileColMask = dropColMask = THREAT_MASK;
-
-            break;
-        }
-    }
-
-#ifdef __clang__
-    #pragma clang loop unroll(enable)
-#elifdef __GNUC__
-    #pragma GCC unroll 3
+///////////////////////////////////////////////////////////
+/// @brief  Make 7 lock function for transposition tables.
+///////////////////////////////////////////////////////////
+static inline TTLock Make7_lock(const Make7 *const restrict _M7)
+{
+#ifdef FTW_TT_128_BITS
+    const uint64_t M7_KEY[3] = { Make7_partKey(_M7), _M7->tile1, _M7->tile2 };
+#ifdef FTW_XXHASH
+    const XXH128_hash_t LOCK = XXH3_128bits_withSeed(M7_KEY, sizeof(M7_KEY), MAKE7_XXHSEED);
+    return LOCK.low64 | (TTLock)(LOCK.high64) << 64;
+#else
+    const Murmur128 LOCK = Murmur3_x64_128bits(M7_KEY, sizeof(M7_KEY), MAKE7_SM_SALT);
+    return LOCK.h2 | (TTLock)(LOCK.h1) << 64;
 #endif
-    for (tileIndex = 3; tileIndex--;)
-    {
-        const uint8_t TILE_SHIFT = tileIndex << 3;
+#else
+#ifdef FTW_XXHASH
+    const uint64_t M7_KEY[3] = { Make7_partKey(_M7), _M7->tile1, _M7->tile2 };
+    return XXH3_64bits_withSeed(M7_KEY, sizeof(M7_KEY), MAKE7_XXHSEED);
+#else
+    return SplitMix64_finalize((Make7_partKey(_M7) + MAKE7_SM_SALT) ^ SplitMix64_finalize(_M7->tile1 + MAKE7_T1_SALT) ^ SplitMix64_finalize(_M7->tile2 + MAKE7_T2_SALT));
+#endif
+#endif
+}
 
-        while (tileColMask && OFF_TILES[tileIndex])
-        {
-            const uint64_t TILE_MASK = tileColMask & -tileColMask;
+////////////////////////////////////////
+/// @brief  Is the game of Make 7 over?
+////////////////////////////////////////
+static inline bool Make7_over(const Make7 *const restrict _M7)
+{
+    return Make7_targetSum(_M7) || Make7_noMoreTiles(_M7) || Make7_full(_M7);
+}
 
-            Make7_append(_arr, _num, TILE_SHIFT | stdc_trailing_zeros_ull(TILE_MASK) >> 3, tilePosition);
+///////////////////////////////////////////////////////
+/// @brief  Announces the winner of the Make 7 game.
+/// @param  _M7
+/// @return `-1`: Ongoing;`0`: Draw; `1`: P1; `2`: P2.
+///////////////////////////////////////////////////////
+static inline int Make7_winner(const Make7 *const restrict _M7)
+{
+    return Make7_targetSum(_M7) ? (!(Make7_moves(_M7) & 1) ? 2 : 1) : -!Make7_noMoreTiles(_M7);
+}
 
-            tileColMask ^= TILE_MASK;
-        }
-
-        tileColMask = dropColMask;
-        tilePosition = *_num;
-    }
-}*/
+////////////////////////////////////////////////////////////
+/// @brief      Selects a target sum (win condition) mode.
+/// @details    Exact: 2+2+3=7 => win; 2+2+2+3=9 => no win
+///             Slider: 2+2+2+3 == 2+[2+2+3] => win
+////////////////////////////////////////////////////////////
+static inline void Make7_setTargetMode(void)
+{
+    Make7_targetSum_choice = M7_targetMode ? Make7_targetSum_window : Make7_targetSum_exact;
+}
 
 /////////////////////////////////////////////////////////////////
 /// @brief  Does the multiset contain at least a pair of size 4?
@@ -1074,11 +1119,10 @@ static inline void Make7_policy_addMove(uint64_t _bitPos, const uint8_t _T_INDEX
 ////////////////////////////////////////////////////////////////////////////////
 static inline bool Make7_policy(const Make7 *const restrict _M7, char _movChr[const restrict static 2])
 {
-    const uint64_t ALL_T3_MASK = _M7->mask ^ (_M7->tile1 | _M7->tile2);
     const uint64_t OP_SIDE = _M7->side ^ _M7->mask;
     const uint64_t OP_T1_MASK = OP_SIDE & _M7->tile1;
     const uint64_t OP_T2_MASK = OP_SIDE & _M7->tile2;
-    const uint64_t OP_T3_MASK = OP_SIDE & ALL_T3_MASK;
+    const uint64_t OP_T3_MASK = OP_SIDE & (_M7->mask ^ (_M7->tile1 | _M7->tile2));
 
     const uint64_t OP_LINE3_THREATS[3] = { Make7_line3_threats(OP_T1_MASK, OP_T2_MASK, OP_T3_MASK, 0),
                                            Make7_line3_threats(OP_T1_MASK, OP_T2_MASK, OP_T3_MASK, 1),
@@ -1100,8 +1144,8 @@ static inline bool Make7_policy(const Make7 *const restrict _M7, char _movChr[co
                                            0,
                                            0 };
 
-    const uint8_t OFF_TILES[3] = { Make7_count(_M7->avails, _M7->turn, 0), Make7_count(_M7->avails, _M7->turn, 1), Make7_count(_M7->avails, _M7->turn, 2) };
-    const uint64_t DROPPABLE_MASK = (_M7->mask + MAKE7_BOT) & MAKE7_ALL;
+    const uint8_t OFF_TILES[3] = Make7_offTileCounts(_M7);
+    const uint64_t DROPPABLE_MASK = Connect4_dropMask(_M7->mask, MAKE7_BOT, MAKE7_ALL);
 
     uint8_t polyArr[MAKE7_SIZE_X3], polyCnt = 0;
 
@@ -1136,69 +1180,6 @@ static inline bool Make7_policy(const Make7 *const restrict _M7, char _movChr[co
     }
 
     return false;
-}
-
-//////////////////////////////////////////////////////
-/// @brief  Tests if a player has insufficient tiles.
-/// @param  _M7
-//////////////////////////////////////////////////////
-static inline bool Make7_noMoreTiles(const Make7 *const restrict _M7)
-{
-    const uint8_t OFF_TILES[3] = { Make7_count(_M7->avails, _M7->turn, 0), Make7_count(_M7->avails, _M7->turn, 1), Make7_count(_M7->avails, _M7->turn, 2) };
-
-    // Do they (players) have 1 and 2 tiles left?
-    // Yes: Play it through until the latter condition is met.
-    // No: Does the grid state allow droppable 3 tiles? If so, they have a move.
-    return !(OFF_TILES[0] || OFF_TILES[1] || (OFF_TILES[2] && ((_M7->mask + MAKE7_BOT) & MAKE7_THREES_MASK)));
-}
-
-////////////////////////////////////////
-/// @brief  Is the game of Make 7 over?
-////////////////////////////////////////
-static inline bool Make7_over(const Make7 *const restrict _M7)
-{
-    return Make7_targetSum(_M7) || Make7_noMoreTiles(_M7) || Make7_full(_M7);
-}
-
-///////////////////////////////////////////////////////
-/// @brief  Announces the winner of the Make 7 game.
-/// @param  _M7
-/// @return `-1`: Ongoing;`0`: Draw; `1`: P1; `2`: P2.
-///////////////////////////////////////////////////////
-static inline int Make7_winner(const Make7 *const restrict _M7)
-{
-    return Make7_targetSum(_M7) ? (!(Make7_moves(_M7) & 1) ? 2 : 1) : -!Make7_noMoreTiles(_M7);
-}
-
-/////////////////////////////////////////////////////////////
-/// @brief      Selects a target sum (win condition) method.
-/// @details    Exact: 2+2+3=7 => win; 2+2+2+3=9 => no win
-///             Slider: 2+2+2+3 == 2+[2+2+3] => win
-/////////////////////////////////////////////////////////////
-static inline void Make7_setTargetMethod(void)
-{
-    Make7_targetSum_choice = M7_targetMethod ? Make7_targetSum_window : Make7_targetSum_exact;
-}
-
-///////////////////////////////////////
-/// @brief  Make 7 partial key helper.
-/// @note   Full key is 105 bits.
-///////////////////////////////////////
-static inline uint64_t Make7_partKey(const Make7 *const restrict _M7)
-{
-    return _M7->side + _M7->mask;
-}
-
-///////////////////////////////////////////////////////////
-/// @brief  Make 7 lock function for transposition tables.
-///////////////////////////////////////////////////////////
-static inline uint64_t Make7_lock(const Make7 *const restrict _M7)
-{
-    const uint64_t LOCK_A = SplitMix64_finalize(Make7_partKey(_M7) + MAKE7_SM_SALT);
-    const uint64_t LOCK_B = SplitMix64_finalize(_M7->tile1 + MAKE7_T1_SALT);
-    const uint64_t LOCK_C = SplitMix64_finalize(_M7->tile2 + MAKE7_T2_SALT);
-
-    return LOCK_A ^ LOCK_B ^ LOCK_C;
 }
 
 /////////////////////////////////////////////////////////
@@ -1282,6 +1263,7 @@ static inline bool Make7_keyLess(const uint64_t _A0, const uint64_t _A1, const u
 /// @param  _ck0
 /// @param  _ck1
 /// @param  _ck2
+/// @return Lexographic minimum key.
 ///////////////////////////////////////////////////////////////////////////
 static inline void Make7_canonicalize(const uint64_t _K0, const uint64_t _K1, const uint64_t _K2, uint64_t *const restrict _ck0, uint64_t *const restrict _ck1, uint64_t *const restrict _ck2)
 {
@@ -1299,8 +1281,8 @@ static inline void Make7_canonicalize(const uint64_t _K0, const uint64_t _K1, co
 
 /////////////////////////////////////////////////////////////////
 /// @brief          Processes user input and play a Make 7 move.
-/// @param _m7      Unaliased pointer to the Make 7 state.
-/// @param _INPUT   Letter (column) and number (tile) string.
+/// @param  _m7     Unaliased pointer to the Make 7 state.
+/// @param  _INPUT  Letter (column) and number (tile) string.
 /// @return         `true` if successful; otherwise `false`.
 /////////////////////////////////////////////////////////////////
 static inline bool Make7_parse(Make7 *const restrict _m7, const char _INPUT[restrict static 2])

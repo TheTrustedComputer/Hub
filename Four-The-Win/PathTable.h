@@ -11,8 +11,8 @@
 
 typedef struct
 {
-    uint64_t key;
-    uint16_t nodeId, searchId;
+    Board key;
+    //uint16_t nodeId, searchId;
     bool edge;
 }
 PathEntry;
@@ -34,7 +34,7 @@ PathStack;
 typedef struct
 {
     uint16_t *restrict succ;
-    uint64_t lock;
+    TTLock lock;
     uint32_t cap;
     uint16_t size;
 }
@@ -78,7 +78,7 @@ PathTarjan;
 /// @param  _PE
 /// @param  _KEY
 ///////////////////////////////////
-static inline bool PathEntry_backedge(const PathEntry *const restrict _PE, const uint64_t _KEY)
+static inline bool PathEntry_backedge(const PathEntry *const restrict _PE, const Board _KEY)
 {
     return _PE->key == _KEY && _PE->edge;
 }
@@ -107,7 +107,7 @@ static inline void PathEntry_pop(PathEntry *const restrict _pe)
 /// @param  _PT
 /// @param  _KEY
 ///////////////////////////////////////////////////////////
-static inline uint16_t PathTable_index(const PathTable *const restrict _PT, const uint64_t _KEY)
+static inline uint16_t PathTable_index(const PathTable *const restrict _PT, const Board _KEY)
 {
 #if FTW_C4_MAX_BITS <= 64
 #ifdef FTW_FASTMOD
@@ -131,7 +131,7 @@ static inline uint16_t PathTable_index(const PathTable *const restrict _PT, cons
 /// @param  _PT
 /// @param  _KEY
 ///////////////////////////////////////////////////////////////
-static inline PathEntry *PathTable_probe(const PathTable *const restrict _PT, const uint64_t _KEY)
+static inline PathEntry *PathTable_probe(const PathTable *const restrict _PT, const Board _KEY)
 {
     PathEntry *restrict pe = &_PT->entry[PathTable_index(_PT, _KEY)];
 
@@ -271,7 +271,7 @@ static inline void PathGraph_destroy(PathGraph *const restrict _pg)
 /// @param  _pe
 /// @param  _LOCK
 /////////////////////////////////////////////////////
-static inline uint16_t PathGraph_getNode(PathGraph *const restrict _pg, PathEntry *const restrict _pe, const uint64_t _LOCK)
+/*static inline uint16_t PathGraph_getNode(PathGraph *const restrict _pg, PathEntry *const restrict _pe, const TTLock _LOCK)
 {
     if (_pg->searchId == _pe->searchId && _pg->node)
     {
@@ -294,7 +294,7 @@ static inline uint16_t PathGraph_getNode(PathGraph *const restrict _pg, PathEntr
     _pe->searchId = _pg->searchId;
 
     return IDX;
-}
+}*/
 
 ////////////////////////////////////////////
 /// @brief  Adds an edge to the path graph.
@@ -304,7 +304,7 @@ static inline uint16_t PathGraph_getNode(PathGraph *const restrict _pg, PathEntr
 /// @param  _U_KEY  The "from" key.
 /// @param  _LOCK   The "to" lock.
 ////////////////////////////////////////////
-static inline void PathGraph_addEdge(PathGraph *const restrict _pg, const PathTable *const restrict _PT, PathEntry *const restrict _pe, const uint64_t _U_KEY, const uint64_t _LOCK)
+/*static inline void PathGraph_addEdge(PathGraph *const restrict _pg, const PathTable *const restrict _PT, PathEntry *const restrict _pe, const Board _U_KEY, const TTLock _LOCK)
 {
     const uint16_t U = PathGraph_getNode(_pg, PathTable_probe(_PT, _U_KEY), _LOCK);
     const uint16_t V = PathGraph_getNode(_pg, _pe, _LOCK);
@@ -313,7 +313,7 @@ static inline void PathGraph_addEdge(PathGraph *const restrict _pg, const PathTa
 
     pn->size == pn->cap ? (pn->succ = realloc(pn->succ, (pn->cap = pn->cap ? pn->cap << 1 : 1) * sizeof(*pn->succ))) : FTW_VOID_NOP;
     pn->succ[pn->size++] = V;
-}
+}*/
 
 ////////////////////////////////////////////////////////////
 /// @brief  Initializes Tarjan's algorithm data structures.
@@ -409,7 +409,7 @@ static inline void PathTarjan_findSCCs(PathTarjan *const restrict _pj, const Tra
                     continue;
 
                 PathTarjan_findSCCs_lockHit:
-                    sccTE->value = 0;
+                    sccTE->value = 0; // Draw value
                     sccTE->depth = UINT16_MAX;
                     sccTE->bound = TT_EXACT;
                     inexactDraw = false;

@@ -45,6 +45,7 @@
 
 #ifdef FTW_SQLITE
     #include "sqlite3.h"
+    #include "../Queue.h"
 #endif
 
 //////////////////////////////////////////////////////////////////////////
@@ -62,10 +63,11 @@ static inline int FourTheWin_monoTime(struct timespec *const restrict _ts)
 #endif
 }
 
-#ifdef __linux__
+#ifdef __unix__
     #include <sys/sysinfo.h>
     #include <sys/resource.h>
-    static constexpr rlim_t FTW_STACK_SIZE = 67108864;
+    #include <unistd.h>
+    //static constexpr rlim_t FTW_STACK_SIZE = 67108864;
 #elif defined(_WIN64) || defined(_WIN32)
     #include <windows.h>
 #endif
@@ -90,9 +92,21 @@ static inline int FourTheWin_monoTime(struct timespec *const restrict _ts)
     #include "../fastmod/include/fastmod.h"
 #endif
 
+#ifdef FTW_TT_128_BITS
+    #undef FTW_NODEPOOL
+    #include "../Murmur3.h"
+#ifdef __SIZEOF_INT128__
+    typedef __uint128_t TTLock;
+#else
+    typedef unsigned _BitInt(128) TTLock;
+#endif
+#else
+    typedef uint64_t TTLock;
+#endif
+
+#include "../SplitMix.h"
 #include "../Xoshiro.h"
 #include "../BumpPool.h"
-#include "../Queue.h"
 
 #include "Messages.h"
 #include "Connect4.h"
@@ -109,6 +123,7 @@ static inline int FourTheWin_monoTime(struct timespec *const restrict _ts)
 #include "Database.h"
 #include "NegaScout.h"
 #include "MonteCarlo.h"
+#include "SearchThread.h"
 #include "PerfTest.h"
 #include "Interface.h"
 

@@ -41,7 +41,7 @@ static inline bool SQLite_pragmas(sqlite3 *const restrict _db)
 }
 
 ///////////////////////////////////////////////////////////////////
-/// @brief          Opens a SQLite database for read/write.
+/// @brief          Opens a SQLite database for read and write.
 /// @param  _db     A pointer to the database handle.
 /// @param  _NAME   Name of the file relative to the binary path.
 /// @return         Value of `SQLite_pragmas()`.
@@ -51,18 +51,17 @@ static inline bool SQLite_open(sqlite3 **_db, const char *const restrict _NAME)
 {
     SQLite_check(sqlite3_open(_NAME, _db), *_db, "\e[1m%s: Could not open the solution database -- %s.\e[0m\n");
 
-    // s = solution; k = key; t = turn; m = method; r = result
-    static constexpr char C4_TABLE_QUERY[] = "CREATE TABLE IF NOT EXISTS s (k BLOB PRIMARY KEY, r BLOB) WITHOUT ROWID;";
-    static constexpr char PT_TABLE_QUERY[] = "CREATE TABLE IF NOT EXISTS s (k0 BLOB, k1 INTEGER, r BLOB, PRIMARY KEY(k0, k1)) WITHOUT ROWID;";
-    static constexpr char M7_TABLE_QUERY[] = "CREATE TABLE IF NOT EXISTS s (k0 INTEGER, k1 INTEGER, k2 INTEGER, m INTEGER, r BLOB, PRIMARY KEY(k0, k1, k2, m)) WITHOUT ROWID;";
+    static constexpr char C4_TABLE_QUERY[] = "CREATE TABLE IF NOT EXISTS ORACLE (KEY BLOB PRIMARY KEY, RESULT BLOB) WITHOUT ROWID;";
+    static constexpr char PT_TABLE_QUERY[] = "CREATE TABLE IF NOT EXISTS ORACLE (KEY0 BLOB, KEY1 INTEGER, RESULT BLOB, PRIMARY KEY(KEY0, KEY1)) WITHOUT ROWID;";
+    static constexpr char M7_TABLE_QUERY[] = "CREATE TABLE IF NOT EXISTS ORACLE (KEY0 BLOB, KEY1 BLOB, KEY2 BLOB, MODE INTEGER, RESULT BLOB, PRIMARY KEY(KEY0, KEY1, KEY2, MODE)) WITHOUT ROWID;";
 
-    const bool POP10 = C4_variant == CONNECT4_POP10;
-    const bool MAKE7 = C4_variant == CONNECT4_MAKE7;
+    const bool DB_MAKE7 = C4_variant == CONNECT4_MAKE7;
 
-    SQLite_check(sqlite3_exec(*_db, MAKE7 ? M7_TABLE_QUERY : POP10 ? PT_TABLE_QUERY : C4_TABLE_QUERY, nullptr, nullptr, nullptr), *_db, "\e[1m%s: Could not create the solution database -- %s.\e[0m\n");
+    SQLite_check(sqlite3_exec(*_db, DB_MAKE7 ? M7_TABLE_QUERY : (C4_variant == CONNECT4_POP10 ? PT_TABLE_QUERY : C4_TABLE_QUERY), nullptr, nullptr, nullptr), *_db, "\e[1m%s: Could not create the solution database -- %s.\e[0m\n");
 
-    keyBlob = !MAKE7 ? REC_calloc(sizeof(Board), 1, "Could not allocate memory for the key blob.", true) : nullptr;
-    resBlob = REC_calloc(!MAKE7 + 1, 1, "Could not allocate memory for the result blob.", true);
+    // 56 + 2*49 = 154
+    keyBlob = REC_calloc(DB_MAKE7 ? sizeof(uint8_t) * 154 : sizeof(Board), 1, "Could not allocate memory for the key blob.", true);
+    resBlob = REC_calloc(!DB_MAKE7 + 1, 1, "Could not allocate memory for the result blob.", true);
 
     return SQLite_pragmas(*_db);
 }
@@ -88,7 +87,7 @@ static inline bool SQLite_close(sqlite3 *const restrict _db)
 ///////////////////////////////////////////////////////////
 static inline bool SQLite_delete(sqlite3 *const restrict _db)
 {
-    SQLite_check(sqlite3_exec(_db, "DELETE FROM s;", nullptr, nullptr, nullptr), _db, "\e[1m%s: Could not delete the solution database table -- %s.\e[0m\n");
+    SQLite_check(sqlite3_exec(_db, "DELETE FROM ORACLE;", nullptr, nullptr, nullptr), _db, "\e[1m%s: Could not delete the solution database table -- %s.\e[0m\n");
 
     return true;
 }
@@ -115,26 +114,24 @@ static inline bool SQLite_commitTransaction(sqlite3 *const restrict _db)
     return true;
 }
 
-///////////////////////////////////////////////////////////
-/// @brief      Queries the DB for a solution (Connect 4).
-/// @param _db  Unaliased pointer to the DB handle.
-/// @param _KEY The Connect 4 key to look for.
-/// @param _res Where to write the result if found.
-/// @return     `true` on hit; `false` on miss or error.
-///////////////////////////////////////////////////////////
-static inline bool SQLite_Connect4_query(sqlite3 *const restrict _db, const Board _KEY, Result *const restrict _res)
+///////////////////////////////////////////////////////////////
+/// @brief          Queries the DB for a solution (Connect 4).
+/// @param  _db     Unaliased pointer to the DB handle.
+/// @param  _key    The Connect 4 key to look for.
+/// @param  _res    Where to write the result if found.
+/// @return         `true` on hit; `false` on miss or error.
+///////////////////////////////////////////////////////////////
+static inline bool SQLite_Connect4_query(sqlite3 *const restrict _db, Board _key, Result *const restrict _res)
 {
     sqlite3_stmt *stmt;
 
-    SQLite_check(sqlite3_prepare_v2(_db, "SELECT r FROM s WHERE k = ?;", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare a selection statement for Connect 4 -- %s.\e[0m\n");
+    SQLite_check(sqlite3_prepare_v2(_db, "SELECT RESULT FROM ORACLE WHERE KEY = ?;", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare a selection statement for Connect 4 -- %s.\e[0m\n");
 
     uint8_t keyBytes = 0;
 
-    memset(keyBlob, 0, sizeof(Board));
-
-    for (Board key = Connect4_canonicalize(_KEY); key; key >>= 8)
+    for (_key = Connect4_canonicalize(_key); _key; _key >>= 8)
     {
-        keyBlob[keyBytes++] = key;
+        keyBlob[keyBytes++] = _key;
     }
 
     sqlite3_bind_blob(stmt, 1, keyBlob, keyBytes, SQLITE_STATIC);
@@ -152,27 +149,25 @@ static inline bool SQLite_Connect4_query(sqlite3 *const restrict _db, const Boar
     return false;
 }
 
-//////////////////////////////////////////////////////////////////
-/// @brief  Queries the DB for the Pop 10 variation of Connect 4.
-/// @param  _db
-/// @param  _KEY_A
-/// @param  _KEY_B
-/// @param  _res
-/// @return See `SQLite_Connect4_query()` for return value.
-//////////////////////////////////////////////////////////////////
-static inline bool SQLite_Connect4_pop10_query(sqlite3 *const restrict _db, const Board _KEY_A, const Board _KEY_B, Result *const restrict _res)
+//////////////////////////////////////////////////////////////////////////
+/// @brief          Queries the DB for the Pop 10 variation of Connect 4.
+/// @param  _db     Unaliased pointer to the DB handle.
+/// @param  _key_A  Same as `SQLite_Connect4_query()`.
+/// @param  _KEY_B  The Pop 10 metadata key.
+/// @param  _res    Where to write the result if found.
+/// @return         See `SQLite_Connect4_query()` for return value.
+//////////////////////////////////////////////////////////////////////////
+static inline bool SQLite_Connect4_pop10_query(sqlite3 *const restrict _db, Board _key_A, const Board _KEY_B, Result *const restrict _res)
 {
     sqlite3_stmt *stmt;
 
-    SQLite_check(sqlite3_prepare_v2(_db, "SELECT r FROM s WHERE k0 = ? AND k1 = ?;", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare a selection statement for Connect 4 Pop 10 -- %s.\e[0m\n");
+    SQLite_check(sqlite3_prepare_v2(_db, "SELECT RESULT FROM ORACLE WHERE KEY0 = ? AND KEY1 = ?;", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare a selection statement for Connect 4 Pop 10 -- %s.\e[0m\n");
 
     uint8_t keyBytes = 0;
 
-    memset(keyBlob, 0, sizeof(Board));
-
-    for (Board key = Connect4_canonicalize(_KEY_A); key; key >>= 8)
+    for (_key_A = Connect4_canonicalize(_key_A); _key_A; _key_A >>= 8)
     {
-        keyBlob[keyBytes++] = key;
+        keyBlob[keyBytes++] = _key_A;
     }
 
     sqlite3_bind_blob(stmt, 1, keyBlob, keyBytes, SQLITE_STATIC);
@@ -191,26 +186,49 @@ static inline bool SQLite_Connect4_pop10_query(sqlite3 *const restrict _db, cons
     return false;
 }
 
-///////////////////////////////////////////////////////////////
-/// @brief  Searches the DB for a precomputed Make 7 solution.
-/// @param  _db
-/// @param  _k0
-/// @param  _k1
-/// @param  _k2
-/// @param  _WM
-/// @param  _res
-///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+/// @brief          Searches the DB for a precomputed Make 7 solution.
+/// @param  _db     Unaliased pointer to the DB handle.
+/// @param  _k0     Primary key.
+/// @param  _k1     Secondary key.
+/// @param  _k2     Tertiary key.
+/// @param  _WM     Win method metadata.
+/// @param  _res    Where to write the result if found.
+///////////////////////////////////////////////////////////////////////
 static inline bool SQLite_Make7_query(sqlite3 *const restrict _db, uint64_t _k0, uint64_t _k1, uint64_t _k2, const bool _WM, Result *const restrict _res)
 {
     sqlite3_stmt *stmt;
 
-    SQLite_check(sqlite3_prepare_v2(_db, "SELECT r FROM s WHERE k0 = ? AND k1 = ? AND k2 = ? AND m = ?;", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare a selection statement for Make 7 -- %s.\e[0m\n");
+    SQLite_check(sqlite3_prepare_v2(_db, "SELECT RESULT FROM ORACLE WHERE KEY0 = ? AND KEY1 = ? AND KEY2 = ? AND MODE = ?;", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare a selection statement for Make 7 -- %s.\e[0m\n");
 
     Make7_canonicalize(_k0, _k1, _k2, &_k0, &_k1, &_k2);
 
-    sqlite3_bind_int64(stmt, 1, _k0);
-    sqlite3_bind_int64(stmt, 2, _k1);
-    sqlite3_bind_int64(stmt, 3, _k2);
+    uint8_t keyBytes = 0, k0Bytes = 0, k1Bytes = 0, k2Bytes = 0;
+
+    while (_k0)
+    {
+        keyBlob[keyBytes++] = _k0;
+        k0Bytes++;
+        _k0 >>= 8;
+    }
+
+    while (_k1)
+    {
+        keyBlob[keyBytes++] = _k1;
+        k1Bytes++;
+        _k1 >>= 8;
+    }
+
+    while (_k2)
+    {
+        keyBlob[keyBytes++] = _k2;
+        k2Bytes++;
+        _k2 >>= 8;
+    }
+
+    sqlite3_bind_blob(stmt, 1, keyBlob, k0Bytes, SQLITE_STATIC);
+    sqlite3_bind_blob(stmt, 2, keyBlob + k0Bytes, k1Bytes, SQLITE_STATIC);
+    sqlite3_bind_blob(stmt, 3, keyBlob + k0Bytes + k1Bytes, k2Bytes, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 4, _WM);
 
     if (sqlite3_step(stmt) == SQLITE_ROW)
@@ -226,27 +244,24 @@ static inline bool SQLite_Make7_query(sqlite3 *const restrict _db, uint64_t _k0,
     return false;
 }
 
-//////////////////////////////////////////////////////////
-/// @brief      Inserts a result into the DB (Connect 4).
-/// @param _db  Unaliased pointer to the DB handle.
-/// @param _KEY The Connect 4 key to look for.
-/// @param _RES The result to insert or replace.
-/// @return     `true` if successful; otherwise `false`.
-//////////////////////////////////////////////////////////
-static inline bool SQLite_Connect4_insert(sqlite3 *const restrict _db, const Board _KEY, const Result *const restrict _RES)
+//////////////////////////////////////////////////////////////
+/// @brief          Inserts a result into the DB (Connect 4).
+/// @param  _db     Unaliased pointer to the DB handle.
+/// @param  _key    See `SQLite_Connect4_insert()`.
+/// @param  _RES    The result to insert or replace.
+/// @return         `true` if successful; otherwise `false`.
+//////////////////////////////////////////////////////////////
+static inline bool SQLite_Connect4_insert(sqlite3 *const restrict _db, Board _key, const Result *const restrict _RES)
 {
     sqlite3_stmt *stmt;
 
-    SQLite_check(sqlite3_prepare_v2(_db, "REPLACE INTO s (k, r) VALUES (?, ?);", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare an insertion statement for Connect 4 -- %s.\e[0m\n");
+    SQLite_check(sqlite3_prepare_v2(_db, "REPLACE INTO ORACLE (KEY, RESULT) VALUES (?, ?);", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare an insertion statement for Connect 4 -- %s.\e[0m\n");
 
     uint8_t keyBytes = 0, resBytes = 0;
 
-    memset(keyBlob, 0, sizeof(Board));
-    memset(resBlob, 0, sizeof(*resBlob) * 2);
-
-    for (Board key = Connect4_canonicalize(_KEY); key; key >>= 8)
+    for (_key = Connect4_canonicalize(_key); _key; _key >>= 8)
     {
-        keyBlob[keyBytes++] = key;
+        keyBlob[keyBytes++] = _key;
     }
 
     for (uint16_t blob = Result_toScalar(_RES); blob; blob >>= 8)
@@ -270,27 +285,24 @@ static inline bool SQLite_Connect4_insert(sqlite3 *const restrict _db, const Boa
     return true;
 }
 
-///////////////////////////////////////////////////
-/// @brief  Database insertion (Connect 4 Pop 10).
-/// @param  _db
-/// @param  _KEY_A
-/// @param  _KEY_B
-/// @param  _RES
-///////////////////////////////////////////////////
-static inline bool SQLite_Connect4_pop10_insert(sqlite3 *const restrict _db, const Board _KEY_A, const Board _KEY_B, const Result *const restrict _RES)
+/////////////////////////////////////////////////////////////////////
+/// @brief          Inserts a result into the DB (Connect 4 Pop 10).
+/// @param  _db     Unaliased pointer to the DB handle.
+/// @param  _key_A  See `SQLite_Connect4_insert()`.
+/// @param  _KEY_B  The Pop 10 metadata key.
+/// @param  _RES    The result to insert or replace.
+/////////////////////////////////////////////////////////////////////
+static inline bool SQLite_Connect4_pop10_insert(sqlite3 *const restrict _db, Board _key_A, const Board _KEY_B, const Result *const restrict _RES)
 {
     sqlite3_stmt *stmt;
 
-    SQLite_check(sqlite3_prepare_v2(_db, "REPLACE INTO s (k0, k1, r) VALUES (?, ?, ?);", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare an insertion statement for Connect 4 Pop 10 -- %s.\e[0m\n");
+    SQLite_check(sqlite3_prepare_v2(_db, "REPLACE INTO ORACLE (KEY0, KEY1, RESULT) VALUES (?, ?, ?);", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare an insertion statement for Connect 4 Pop 10 -- %s.\e[0m\n");
 
     uint8_t keyBytes = 0, resBytes = 0;
 
-    memset(keyBlob, 0, sizeof(Board));
-    memset(resBlob, 0, sizeof(*resBlob) * 2);
-
-    for (Board key = Connect4_canonicalize(_KEY_A); key; key >>= 8)
+    for (_key_A = Connect4_canonicalize(_key_A); _key_A; _key_A >>= 8)
     {
-        keyBlob[keyBytes++] = key;
+        keyBlob[keyBytes++] = _key_A;
     }
 
     for (uint16_t blob = Result_toScalar(_RES); blob; blob >>= 8)
@@ -328,15 +340,38 @@ static inline bool SQLite_Make7_insert(sqlite3 *const restrict _db, uint64_t _k0
 {
     sqlite3_stmt *stmt;
 
-    SQLite_check(sqlite3_prepare_v2(_db, "REPLACE INTO s (k0, k1, k2, m, r) VALUES (?, ?, ?, ?, ?);", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare an insertion statement for Make 7 -- %s.\e[0m\n");
-
-    resBlob[0] = Result_toScalar(_RES);
+    SQLite_check(sqlite3_prepare_v2(_db, "REPLACE INTO ORACLE (KEY0, KEY1, KEY2, MODE, RESULT) VALUES (?, ?, ?, ?, ?);", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare an insertion statement for Make 7 -- %s.\e[0m\n");
 
     Make7_canonicalize(_k0, _k1, _k2, &_k0, &_k1, &_k2);
 
-    sqlite3_bind_int64(stmt, 1, _k0);
-    sqlite3_bind_int64(stmt, 2, _k1);
-    sqlite3_bind_int64(stmt, 3, _k2);
+    uint8_t keyBytes = 0, k0Bytes = 0, k1Bytes = 0, k2Bytes = 0;
+
+    while (_k0)
+    {
+        keyBlob[keyBytes++] = _k0;
+        k0Bytes++;
+        _k0 >>= 8;
+    }
+
+    while (_k1)
+    {
+        keyBlob[keyBytes++] = _k1;
+        k1Bytes++;
+        _k1 >>= 8;
+    }
+
+    while (_k2)
+    {
+        keyBlob[keyBytes++] = _k2;
+        k2Bytes++;
+        _k2 >>= 8;
+    }
+
+    resBlob[0] = Result_toScalar(_RES);
+
+    sqlite3_bind_blob(stmt, 1, keyBlob, k0Bytes, SQLITE_STATIC);
+    sqlite3_bind_blob(stmt, 2, keyBlob + k0Bytes, k1Bytes, SQLITE_STATIC);
+    sqlite3_bind_blob(stmt, 3, keyBlob + k0Bytes + k1Bytes, k2Bytes, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 4, _WM);
     sqlite3_bind_blob(stmt, 5, resBlob, 1, SQLITE_STATIC);
 
@@ -354,26 +389,4 @@ static inline bool SQLite_Make7_insert(sqlite3 *const restrict _db, uint64_t _k0
 }
 
 #endif
-
-/*
-typedef struct
-{
-    char sign[4];       // "FTW!"
-    uint8_t cols;       // Board columns
-    uint8_t rows;       // Board rows
-    uint8_t ruleset;    // Game ruleset
-    uint8_t keySize;    // Bytes per key
-    uint8_t recSize;    // Bytes per record
-    uint64_t records;   // Number of records
-}
-DBHeader;
-
-typedef struct
-{
-    uint8_t *restrict key;
-    uint8_t *restrict res;
-}
-DBRecord;
-*/
-
 #endif // DATABASE_H //

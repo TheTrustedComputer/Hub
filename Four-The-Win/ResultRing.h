@@ -73,9 +73,6 @@ static inline void ResultRing_insert(const Board _KEY_A, const Board _KEY_B, con
     ringEntry->keyB = _KEY_B;
     ringEntry->keyC = _KEY_C;
     ringEntry->res = _RES;
-
-    ringEntry->res.nodes = ringEntry->res.speed = 0;
-    ringEntry->res.time = 0.0;
 }
 
 #endif // RESULTRING_H //

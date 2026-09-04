@@ -36,7 +36,7 @@ TransProbe;
 
 typedef struct
 {
-    uint64_t lock;
+    TTLock lock;
     int16_t value;
     uint16_t depth;
     uint8_t move; // bitwise NOT of move
@@ -143,7 +143,7 @@ static inline uint32_t TransTable_size(size_t _n)
 /// @param  _TT     Unaliased pointer to the transposition table.
 /// @param  _LOCK   Unique integer representation of a state.
 //////////////////////////////////////////////////////////////////
-static inline uint32_t TransTable_index(const TransTable *const restrict _TT, const uint64_t _LOCK)
+static inline uint32_t TransTable_index(const TransTable *const restrict _TT, const TTLock _LOCK)
 {
 #if FTW_C4_MAX_BITS <= 64
 #ifdef FTW_FASTMOD
@@ -178,7 +178,7 @@ static inline uint32_t TransTable_index(const TransTable *const restrict _TT, co
 static inline TransProbe TransBucket_probe
 (
     const TransBucket *const restrict _TB,
-    const uint64_t _LOCK,
+    const TTLock _LOCK,
     const uint16_t _DEP,
     const int16_t _A,
     const int16_t _B,
@@ -244,7 +244,7 @@ static inline TransProbe TransBucket_probe
 static inline void TransBucket_store
 (
     TransBucket *const restrict _tb,
-    const uint64_t _LOCK,
+    const TTLock _LOCK,
     const int16_t _VAL,
     const uint16_t _DEP,
     const int16_t _A,
@@ -252,7 +252,8 @@ static inline void TransBucket_store
     const uint8_t _MOVE
 )
 {
-    TransBound bound = _VAL <= _A ? TT_UPPER : _VAL >= _B ? TT_LOWER : TT_EXACT;
+    const TransBound BOUND = _VAL <= _A ? TT_UPPER : _VAL >= _B ? TT_LOWER : TT_EXACT;
+
     TransEntry *restrict te; uint8_t i;
 
     for (i = 0; i < 4; i++)
@@ -264,7 +265,7 @@ static inline void TransBucket_store
             goto TransTable_new;
         }
 
-        if (te->lock == _LOCK && (te->depth < _DEP || (te->depth == _DEP && bound == te->bound)))
+        if (te->lock == _LOCK && te->depth <= _DEP)
         {
             goto TransTable_update;
         }
@@ -294,7 +295,7 @@ TransTable_update:
     te->value = _VAL;
     te->depth = _DEP;
     te->move = ~_MOVE;
-    te->bound = bound;
+    te->bound = BOUND;
 }
 
 /////////////////////////////////////////////////////////////

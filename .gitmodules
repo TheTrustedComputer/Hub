@@ -4,3 +4,6 @@
 [submodule "libdivide"]
 	path = libdivide
 	url = https://github.com/ridiculousfish/libdivide
+[submodule "xxhash"]
+	path = xxhash
+	url = https://github.com/cyan4973/xxhash

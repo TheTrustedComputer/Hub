@@ -37,26 +37,23 @@ MCTSWDL;
 typedef struct MCTSNode
 {
     struct MCTSNode *restrict ancestor;
-    struct MCTSNode *restrict *restrict descendants;
-    uint64_t key; double visits, score;
-    uint8_t move, count, /*nones, index; */ depth, turn;
-    MCTSWDL wdl;
+    struct MCTSNode **restrict descendants;
+    TTLock lock; double visits, score; uint8_t depth;
+    uint8_t move, count, turn; MCTSWDL wdl;
+    /* uint8_t nones, index; */
 }
 MCTSNode;
 
 typedef struct MCTSEntry
 {
     struct MCTSEntry *restrict next;
-    uint64_t key;
-    uint8_t exp; // expansion count
-    MCTSWDL wdl;
+    TTLock lock; uint8_t exp; MCTSWDL wdl;
 }
 MCTSEntry;
 
 typedef struct MCTSTable
 {
-    struct MCTSEntry *restrict *restrict bucket;
-    uint32_t size;
+    struct MCTSEntry *restrict *restrict bucket; uint32_t size;
 }
 MCTSTable;
 
@@ -64,17 +61,21 @@ typedef struct MCTSResult
 {
     MCTSNode *restrict root;
     const MCTSWDL *restrict wdl;
-    const unsigned long long *restrict trials;
-    unsigned long long *restrict secs;
-    double reward; uint8_t *restrict depth, move;
+    const uint64_t *restrict trials;
+    uint64_t *restrict secs; double reward;
+    uint8_t depth, move;
 }
 MCTSResult;
 
 // static constexpr double MCTS_C = 1.4142135623730950488;
 
-static MemoryPool MCTS_nodePool, MCTS_entryPool;
-static unsigned long long MCTS_trials;
-static MCTSTable MCTS_table;
+#ifdef FTW_NODEPOOL
+    static MemoryPool MCTS_nodePool;
+#endif
+
+static MemoryPool MCTS_entryPool;
+static uint64_t MCTS_trials;
+static MCTSTable MCTS_table; // separate chaining
 static MCTSNode *restrict *restrict MCTS_termNodes;
 static uint8_t *restrict MCTS_movArr, MCTS_termCnt;
 static atomic_bool MCTS_run;
@@ -86,24 +87,24 @@ static bool (*MCTSNode_Connect4_evaluate)(MCTSNode *const restrict, const Connec
 //////////////////////////////////////////////////////
 /// @brief  Returns the index of a node in the table.
 /// @param  _MCT
-/// @param  _KEY
+/// @param  _LOCK
 //////////////////////////////////////////////////////
-static inline uint32_t MCTSTable_index(const MCTSTable *const restrict _MCT, const uint64_t _KEY)
+static inline uint32_t MCTSTable_index(const MCTSTable *const restrict _MCT, const TTLock _LOCK)
 {
-    return _KEY % _MCT->size;
+    return _LOCK % _MCT->size;
 }
 
 ////////////////////////////////////////////////////////////
-/// @brief  Finds a node in the table by key.
+/// @brief  Finds a node in the table by lock.
 /// @param  _MCT
-/// @param  _KEY
+/// @param  _LOCK
 /// @return Pointer to the node, or `nullptr` if not found.
 ////////////////////////////////////////////////////////////
-static inline MCTSEntry *MCTSTable_find(const MCTSTable *const restrict _MCT, const uint64_t _KEY)
+static inline MCTSEntry *MCTSTable_find(const MCTSTable *const restrict _MCT, const TTLock _LOCK)
 {
-    for (MCTSEntry *restrict me = _MCT->bucket[MCTSTable_index(_MCT, _KEY)]; me; me = me->next)
+    for (MCTSEntry *restrict me = _MCT->bucket[MCTSTable_index(_MCT, _LOCK)]; me; me = me->next)
     {
-        if (me->key == _KEY)
+        if (me->lock == _LOCK)
         {
             return me;
         }
@@ -115,12 +116,12 @@ static inline MCTSEntry *MCTSTable_find(const MCTSTable *const restrict _MCT, co
 //////////////////////////////////////////////////////////
 /// @brief  Increases the expansion count for a node.
 /// @param  _MCT
-/// @param  _KEY
+/// @param  _LOCK
 /// @note   Remains constant on trees; changes on graphs.
 //////////////////////////////////////////////////////////
-static inline void MCTSTable_increaseExp(const MCTSTable *const restrict _MCT, const uint64_t _KEY)
+static inline void MCTSTable_increaseExp(const MCTSTable *const restrict _MCT, const TTLock _LOCK)
 {
-    MCTSEntry *const restrict me = MCTSTable_find(_MCT, _KEY);
+    MCTSEntry *const restrict me = MCTSTable_find(_MCT, _LOCK);
 
     if (me)
     {
@@ -128,23 +129,23 @@ static inline void MCTSTable_increaseExp(const MCTSTable *const restrict _MCT, c
     }
 }
 
-/////////////////////////////////////////////////////////////////////
-/// @brief  Inserts a WDL score into the table by a key of the node.
+//////////////////////////////////////////////////////////////////////
+/// @brief  Inserts a WDL score into the table by a lock of the node.
 /// @param  _MCT
-/// @param  _KEY
+/// @param  _LOCK
 /// @param  _WDL
-/////////////////////////////////////////////////////////////////////
-static inline void MCTSTable_insert(const MCTSTable *const restrict _MCT, const uint64_t _KEY, const MCTSWDL _WDL)
+//////////////////////////////////////////////////////////////////////
+static inline void MCTSTable_insert(const MCTSTable *const restrict _MCT, const TTLock _LOCK, const MCTSWDL _WDL)
 {
-    MCTSEntry *const restrict me = MCTSTable_find(_MCT, _KEY);
+    MCTSEntry *const restrict me = MCTSTable_find(_MCT, _LOCK);
 
     if (!me)
     {
-        const uint32_t IDX = MCTSTable_index(_MCT, _KEY);
+        const uint32_t IDX = MCTSTable_index(_MCT, _LOCK);
 
         MCTSEntry *const restrict newEntry = MemoryPool_alloc(&MCTS_entryPool, sizeof(*newEntry));
 
-        newEntry->key = _KEY;
+        newEntry->lock = _LOCK;
         newEntry->exp = 0;
         newEntry->wdl = _WDL;
         newEntry->next = _MCT->bucket[IDX];
@@ -153,42 +154,43 @@ static inline void MCTSTable_insert(const MCTSTable *const restrict _MCT, const 
     }
 }
 
-/////////////////////////////////////////////////////////////////
-/// @brief  Lookups the WDL score for a node's key in the table.
+//////////////////////////////////////////////////////////////////
+/// @brief  Lookups the WDL score for a node's lock in the table.
 /// @param  _MCT
-/// @param  _KEY
-/////////////////////////////////////////////////////////////////
-static inline MCTSWDL MCTSTable_WDL(const MCTSTable *const restrict _MCT, const uint64_t _KEY)
+/// @param  _LOCK
+/// @return The score upon a match; otherwise `MCTS_NONE`.
+//////////////////////////////////////////////////////////////////
+static inline MCTSWDL MCTSTable_WDL(const MCTSTable *const restrict _MCT, const TTLock _LOCK)
 {
-    MCTSEntry *const restrict me = MCTSTable_find(_MCT, _KEY);
+    MCTSEntry *const restrict me = MCTSTable_find(_MCT, _LOCK);
 
-    return me && me->key == _KEY ? me->wdl : MCTS_NONE;
+    return me && me->lock == _LOCK ? me->wdl : MCTS_NONE;
 }
 
 /////////////////////////////////////////////////////////////////
 /// @brief          Initializes the table with a specified size.
-/// @param _mt      Unaliased pointer to the table.
-/// @param _SIZE    Requested size of the table.
+/// @param  _mt     Unaliased pointer to the table.
+/// @param  _SIZE   Requested size of the table.
 /////////////////////////////////////////////////////////////////
 static inline void MCTSTable_init(MCTSTable *const restrict _mt, const uint32_t _SIZE)
 {
-    _mt->bucket = REC_calloc((_mt->size = _SIZE), sizeof(*_mt->bucket), "Could not allocate memory for the MCTS table.", true);
+    _mt->bucket = REC_calloc((_mt->size = _SIZE), sizeof(*_mt->bucket), "Could not allocate memory for the MCTS WDL hash table.", true);
 }
 
 //////////////////////////////////////////////////////
 /// @brief      Destroys the table by freeing memory.
-/// @param _mt  Unaliased pointer to the table.
+/// @param  _mt Unaliased pointer to the table.
 //////////////////////////////////////////////////////
 static inline void MCTSTable_destroy(MCTSTable *const restrict _mt)
 {
     REC_free(_mt->bucket);
 }
 
-////////////////////////////////////////////////
-/// @brief  Has a node reached its depth limit?
+//////////////////////////////////////////////////
+/// @brief  Has a node reached the maximum depth?
 /// @param  _node
 /// @return `true` if yes; otherwise `false`.
-////////////////////////////////////////////////
+//////////////////////////////////////////////////
 static inline bool MCTSNode_depthLimit(MCTSNode *const restrict _node)
 {
     if (_node->depth == UINT8_MAX)
@@ -353,9 +355,16 @@ static inline void MCTSNode_destroy(MCTSNode *const restrict _node)
         for (uint8_t i = 0; i < _node->count; i++)
         {
             MCTSNode_destroy(_node->descendants[i]);
+#ifndef FTW_NODEPOOL
+            free(_node->descendants[i]);
+#endif
         }
 
+#ifndef FTW_NODEPOOL
+        free(_node->descendants);
+#endif
         _node->descendants = nullptr;
+
     }
 }
 
@@ -370,7 +379,9 @@ static inline void MCTSNode_prune(MCTSNode *const restrict _node)
         MCTSNode *const restrict subnode = _node->descendants[i];
 
         MCTSNode_destroy(subnode);
-
+#ifndef FTW_NODEPOOL
+        free(subnode->descendants);
+#endif
         subnode->descendants = nullptr;
     }
 }
@@ -548,8 +559,13 @@ static inline MCTSNode *MCTSNode_Connect4_expand(MCTSNode *const restrict _node,
 
         MCTS_POP10 ? Connect4_pop10_generate(_c4, _p10, MCTS_movArr, &_node->count) : Connect4_generate(_c4, MCTS_movArr, &_node->count);
 
+#ifdef FTW_NODEPOOL
         _node->descendants = MemoryPool_alloc(&MCTS_nodePool, sizeof(*_node->descendants) * _node->count);
-        MCTS_termCnt = 0;
+#else
+        _node->descendants = calloc(_node->count, sizeof(*_node->descendants));
+#endif
+
+MCTS_termCnt = 0;
 
         for (uint8_t i = 0; i < _node->count; i++)
         {
@@ -557,17 +573,22 @@ static inline MCTSNode *MCTSNode_Connect4_expand(MCTSNode *const restrict _node,
 
             MCTSNode *restrict *const restrict newNode = &_node->descendants[i];
 
+#ifdef FTW_NODEPOOL
             *newNode = MemoryPool_alloc(&MCTS_nodePool, sizeof(**newNode));
+#else
+            *newNode = calloc(1, sizeof(**newNode));
+#endif
+
             MCTSNode_init(*newNode, _node, i, MCTS_movArr[i]);
             MCTS_POP10 ? Connect4_pop10_play(_c4, _p10, (*newNode)->move) : Connect4_play(_c4, (*newNode)->move);
-            (*newNode)->key = Connect4_key(_c4) | (MCTS_POP10 * Connect4_pop10_key(_p10));
+            (*newNode)->lock = Connect4_lock(_c4) | (MCTS_POP10 * Connect4_pop10_key(_p10));
             (*newNode)->turn = MCTS_POP10 ? _p10->turn : !_node->turn;
 
             if (MCTS_POP10 ? MCTSNode_Connect4_pop10_evaluate(*newNode, _p10) : MCTSNode_Connect4_evaluate(*newNode, _c4))
             {
                 MCTS_termNodes[MCTS_termCnt++] = *newNode;
                 //MCTSNode_swap(_node, *newNode);
-                MCTSTable_insert(&MCTS_table, (*newNode)->key, (*newNode)->wdl);
+                MCTSTable_insert(&MCTS_table, (*newNode)->lock, (*newNode)->wdl);
             }
 
             MCTS_POP10 ? Connect4_pop10_unplay(_c4, _p10) : Connect4_unplay(_c4);
@@ -595,33 +616,33 @@ static inline MCTSNode *MCTSNode_Make7_expand(MCTSNode *const restrict _node, co
     {
         Make7_generate(_M7, MCTS_movArr, &_node->count);
 
-        /*if (!_node->count) // Full board debugger (should not happen)
-        {
-            puts("WARNING: Attempt to expand a full board node!");
-            _node->wdl = MCTS_DRAW;
-
-            return _node;
-        }*/
-
+#ifdef FTW_NODEPOOL
         _node->descendants = MemoryPool_alloc(&MCTS_nodePool, sizeof(*_node->descendants) * _node->count);
+#else
+        _node->descendants = calloc(_node->count, sizeof(*_node->descendants));
+#endif
         MCTS_termCnt = 0;
 
         for (uint8_t i = 0; i < _node->count; i++)
         {
             MCTSNode *restrict *const restrict newNode = &_node->descendants[i];
 
+#ifdef FTW_NODEPOOL
             *newNode = MemoryPool_alloc(&MCTS_nodePool, sizeof(**newNode));
+#else
+            *newNode = calloc(1, sizeof(**newNode));
+#endif
             MCTSNode_init(*newNode, _node, !_node->turn, MCTS_movArr[i]);
 
-            Make7 expM7 = *_M7;
+            Make7 expndM7 = *_M7;
 
-            Make7_drop(&expM7, (*newNode)->move >> 3, (*newNode)->move & 7);
-            (*newNode)->key = Make7_lock(&expM7);
+            Make7_drop(&expndM7, (*newNode)->move >> 3, (*newNode)->move & 7);
+            (*newNode)->lock = Make7_lock(&expndM7);
 
-            if (MCTSNode_Make7_evaluate(*newNode, &expM7))
+            if (MCTSNode_Make7_evaluate(*newNode, &expndM7))
             {
                 MCTS_termNodes[MCTS_termCnt++] = *newNode;
-                MCTSTable_insert(&MCTS_table, (*newNode)->key, (*newNode)->wdl);
+                MCTSTable_insert(&MCTS_table, (*newNode)->lock, (*newNode)->wdl);
             }
         }
 
@@ -651,7 +672,7 @@ static inline double MCTSNode_Connect4_simulate(Connect4 *const restrict _c4, Co
 
     for (;;)
     {
-        if ((simWDL = MCTSTable_WDL(&MCTS_table, Connect4_key(_c4) | (SIM_POP10 * Connect4_pop10_key(_p10)))) != MCTS_NONE)
+        if ((simWDL = MCTSTable_WDL(&MCTS_table, Connect4_lock(_c4) | (SIM_POP10 * Connect4_pop10_key(_p10)))) != MCTS_NONE)
         {
             const double SCORE = simWDL == MCTS_WIN ? 2.0 : simWDL == MCTS_LOSS ? -2.0 : 0.0;
 
@@ -743,7 +764,7 @@ static inline void MCTSNode_backpropagate(MCTSNode *restrict _node, double _scor
 
         if (MCTSNode_prove(_node) /*&& parent*/)
         {
-            MCTSTable_insert(&MCTS_table, _node->key, _node->wdl);
+            MCTSTable_insert(&MCTS_table, _node->lock, _node->wdl);
             //MCTSNode_swap(parent, _node);
         }
 
@@ -756,10 +777,10 @@ static inline void MCTSNode_backpropagate(MCTSNode *restrict _node, double _scor
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////
-/// @brief          Chooses the most visited node from a list of descendants.
-/// @param _node    Root node.
-//////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+/// @brief  Chooses the most visited node from a list of descendants.
+/// @param  _node
+//////////////////////////////////////////////////////////////////////
 static inline MCTSNode *MCTSNode_mostRobust(MCTSNode *const restrict _node)
 {
     uint8_t i, draws = 0, losses = 0, nones = 0;
@@ -835,36 +856,35 @@ static inline MCTSNode *MCTSNode_mostRobust(MCTSNode *const restrict _node)
 ///////////////////////////////////////////////////////////////////////////////
 static inline void MCTSResult_print(const MCTSResult *const restrict _RES)
 {
-    const unsigned long long M_SPEED = *_RES->trials / *_RES->secs;
-    const bool M_MAKE7 = C4_variant == CONNECT4_MAKE7;
-    const uint8_t M_MOVE = _RES->move; char mChar;
+    const bool M_MAKE7 = C4_variant == CONNECT4_MAKE7; char mChar;
 
     if (!M_MAKE7)
     {
-        mChar = M_MOVE + (COLS < 10 ? '1' : 'A');
+        mChar = _RES->move + (COLS < 10 ? '1' : 'A');
 
-        if (M_MOVE >= COLS)
+        if (_RES->move >= COLS)
         {
-            mChar = M_MOVE + (COLS < 10 ? 'A' : 'a') - COLS;
+            mChar = _RES->move + (COLS < 10 ? 'A' : 'a') - COLS;
         }
     }
 
+    const uint64_t M_SPEED = *_RES->trials / *_RES->secs;
     const char M_NOTE_A = M_MAKE7 ? (_RES->move >> 3) + '1' : mChar;
     const char M_NOTE_B = M_MAKE7 * ((_RES->move & 7) + 'A');
 
     switch (*_RES->wdl)
     {
     case MCTS_WIN:
-        printf("\r\e[1;92m%c%c %s\e[0m %u %llu %llu %llu        ", M_NOTE_A, M_NOTE_B, FTW_STR_WIN, *_RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
+        printf("\r\e[1;92m%c%c %s\e[0m %u %" PRIu64 " %" PRIu64 " %" PRIu64 "        ", M_NOTE_A, M_NOTE_B, FTW_STR_WIN, _RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
         break;
     case MCTS_DRAW:
-        printf("\r\e[1;93m%c%c %s\e[0m %u %llu %llu %llu        ", M_NOTE_A, M_NOTE_B, FTW_STR_DRAW, *_RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
+        printf("\r\e[1;93m%c%c %s\e[0m %u %" PRIu64 " %" PRIu64 " %" PRIu64 "        ", M_NOTE_A, M_NOTE_B, FTW_STR_DRAW, _RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
         break;
     case MCTS_LOSS:
-        printf("\r\e[1;91m%c%c %s\e[0m %u %llu %llu %llu        ", M_NOTE_A, M_NOTE_B, FTW_STR_LOSS, *_RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
+        printf("\r\e[1;91m%c%c %s\e[0m %u %" PRIu64 " %" PRIu64 " %" PRIu64 "        ", M_NOTE_A, M_NOTE_B, FTW_STR_LOSS, _RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
         break;
     default:
-        printf("\r\e[1m%c%c\e[0m %.3f %u %llu %llu %llu ", M_NOTE_A, M_NOTE_B, _RES->reward, *_RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
+        printf("\r\e[1m%c%c\e[0m %.3f %u %" PRIu64 " %" PRIu64 " %" PRIu64 " ", M_NOTE_A, M_NOTE_B, _RES->reward, _RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
         fflush(stdout);
         break;
     }
@@ -946,43 +966,18 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
 
     MCTSNode rootNode;
 
-    {
-        uint8_t rootTurn;
+    MCTSNode_init(&rootNode, nullptr, 0, 0);
 
-        if (MCTS_POP10)
-        {
-            rootTurn = _P10->turn;
-        }
-        else if (MCTS_MAKE7)
-        {
-            rootTurn = Make7_moves(_M7) & 1;
-        }
-        else
-        {
-            rootTurn = _C4->plies & 1;
-        }
-
-        MCTSNode_init(&rootNode, nullptr, rootTurn, 0);
-    }
-
-    {
-        uint64_t rootKey = Connect4_key(_C4);
-
-        if (MCTS_POP10)
-        {
-            rootKey |= Connect4_pop10_key(_P10);
-        }
-        else if (MCTS_MAKE7)
-        {
-            rootKey = Make7_lock(_M7);
-        }
-
-        rootNode.key = rootKey;
-    }
+    rootNode.lock = MCTS_MAKE7 ? Make7_lock(_M7) : Connect4_lock(_C4) | (MCTS_POP10 * Connect4_pop10_key(_P10));
+    rootNode.turn = MCTS_MAKE7 ? Make7_moves(_M7) & 1 : (MCTS_POP10 ? _P10->turn : _C4->plies & 1);
 
     MCTSTable_init(&MCTS_table, NS_table.size);
+
+#ifdef FTW_NODEPOOL
     MemoryPool_init(&MCTS_nodePool);
+#endif
     MemoryPool_init(&MCTS_entryPool);
+
     atomic_init(&MCTS_run, true);
     signal(SIGINT, MCTS_stopSearch);
 
@@ -996,7 +991,7 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
 
     Make7 mctsM7 = *_M7;
 
-    unsigned long long secs;
+    uint64_t secs;
 
     MCTSResult mctsRes = (MCTSResult)
     {
@@ -1006,9 +1001,7 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
         .secs = &secs
     };
 
-    thrd_t progThrd;
-
-    REC_thrd_create(&progThrd, MCTSResult_thread, &mctsRes, "Could not create the MCTS progress thread.", true);
+    thrd_t progThrd; REC_thrd_create(&progThrd, MCTSResult_thread, &mctsRes, "Could not create the MCTS progress thread.", true);
 
     for (MCTS_trials = secs = 0; atomic_load_explicit(&MCTS_run, memory_order_relaxed) && rootNode.wdl == MCTS_NONE; MCTS_trials++)
     {
@@ -1025,7 +1018,7 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
             MCTS_POP10 ? Connect4_pop10_play(&mctsC4, &mctsP10, leaf->move) : Connect4_play(&mctsC4, leaf->move);
         }
 
-        double reward; mctsRes.depth = &leaf->depth;
+        double reward; mctsRes.depth = leaf->depth;
 
         switch (leaf->wdl)
         {
@@ -1068,8 +1061,12 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
     REC_thrd_join(progThrd, nullptr, "Could not join the MCTS progress thread.", true);
     MCTSNode_destroy(&rootNode);
     MCTSTable_destroy(&MCTS_table);
+
+#ifdef FTW_NODEPOOL
     MemoryPool_destroy(&MCTS_nodePool);
+#endif
     MemoryPool_destroy(&MCTS_entryPool);
+
     !MCTS_MAKE7 ? Connect4_destroy(&mctsC4) : FTW_VOID_NOP;
     REC_free(MCTS_termNodes);
     REC_free(MCTS_movArr);

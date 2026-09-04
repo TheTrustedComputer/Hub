@@ -1,11 +1,12 @@
 /*
  *  Author: 2026- TheTrustedComputer
  *
- *  This is a data structure implementation of the famous Connect Four game and its rules.
- *  Connect Four is represented as a 64-bit bitboard in memory; it is a faster alternative to an array of integers.
- *  It currently supports the original rules and all four official Hasbro variants: PopOut, Power Up, Pop Ten, and Five-in-a-Row.
+ *  This is a data structure implementation of the popular Connect Four game.
+ *  The board is represented by two 64-bit unsigned integers: a player's disk and the union of all disks.
+ *  It currently supports the original rules and two official Hasbro variants: PopOut and Pop 10.
+ *  It also supports the Misere (avoid winning) and Cylinder (horizontally wrapping board) variants.
  *
- *  Visual representation of the bitboard for 7x6:
+ *  Illustration for the 7x6 bitboard:
  *  .. .. .. .. .. .. ..
  *  05 12 19 26 33 40 47
  *  04 11 18 25 32 39 46
@@ -14,43 +15,45 @@
  *  01 08 15 22 29 36 43
  *  00 07 14 21 28 35 42
  *
- *  Numbers indicate the bit index of where each disk may be located. Dots are where these bits are unused but useful for hash encoding.
+ *  Numbers indicate the bit index or offset of each possible location for a disk.
+ *  Dots are where these bits are unused, yet useful for hashing and preventing wraparound.
  *
- *  Originally, two players respectively drop their colored disks on a seven-by-six gridded board.
- *  Players cannot drop another disk on a full column and must use an empty or partially filled column.
- *  The player who connects their disks four-in-a-row vertically, horizontally, or diagonally wins the game.
- *  If neither player has a four-in-a-row before all of the columns were filled, the game is declared drawn.
+ *  Original rules:
+ *  - Two players take turns dropping disks from the top of an empty board.
+ *  - Players are not allowed to drop a disk into a column that is full.
+ *  - Once a disk is on the board, it stays there. The turn switches to the other player.
+ *  - A player wins if they have four disks in a row horizontally, vertically, or diagonally.
+ *  - If all columns are full and neither player has a four in a row, the game ends in a draw.
  *
- *  In PopOut, the game plays exactly like normal except players are granted an additional move called a pop.
- *  A pop is when a player removes one of their disks from the bottom, causing the others on top to fall.
- *  This makes simultaneous four-in-a-rows and repetitions possible in this variant.
- *  To handle the first scenario, the player who popped at that turn is chosen as the winner.
- *  The second scenario will be treated as a draw as it does for chess--a longer, more strategical game than Connect Four.
+ *  Misere rules:
+ *  - Original rules apply, except that the winner becomes the loser.
  *
- *  Power Up is a lot more complex than PopOut as players are introduced four extra disks called Power Checkers.
- *  Players may play at most one specific Power Checker per each game. They cannot play any more once they are all dropped.
- *  Here are the basic descriptions on how each Power Checker works after it is dropped:
- *  Anvils - The player immediately pops all of the disks below it.
- *  Bombs - The player pops one of the opponent's disks on the bottom.
- *  Walls* - The player gains a second turn, but it cannot be dropped where the player can create a Connect Four.
- *  x2* - Virtually identical functionality to walls, but without the aforementioned restriction.
- *  *Players cannot play another Power Checker with any of the wall or x2 disks.
+ *  Cylinder rules:
+ *  - Same as the original, but the board wraps around horizontally.
  *
- *  Pop Ten is different from PopOut and Power Up. The starting position is setup unlike the other three.
- *  Players are required to fill the bottom row first, then the next row until the board is filled.
- *  There is no order where players can drop their disks at. The variant starts when both players pop their disks from the bottom.
- *  If the popped disk is part of a four-in-a-row connection, then that player gets to keep it and recieves another turn.
- *  Otherwise, the player must put it back not in the same column whenever possible, and the turn switches to the other player.
- *  In some incredibly rare circumstances, the player to move cannot make a single pop move when it is their turn!
- *  That player must pass his turn unless the player already made some pop moves. If the latter case, the player must place that disk back to the board.
- *  The objective is to be the first player to collect at least ten disks.
+ *  PopOut rules:
+ *  - The game is played normally, but players are granted an extra move called a pop.
+ *  - A pop removes one of the player's bottom disks, causing the disks above it to fall.
+ *  - This move introduces the possibility of simultaneous four-in-a-rows and cycles.
+ *  - To resolve the first scenario, the player who just moved is declared the winner.
+ *  - The second scenario is treated as a draw by threefold repetition.
+ *  - However, the search engine considers infinite play to be a draw.
  *
- *  Solvability of Connect Four games:
- *  Original: Solved in 1988 by James Allen and Victor Allis. The first player wins. John Tromp showed different players win on different board sizes.
- *  PopOut: Solved in 2014 by Jukka Pukkala. The first player wins. The solution is half as long than with the original rules.
- *  Power Up: Unsolved. This variant has a huge branching factor. For example, there are 105 (7 normal, 7*7 walls and 7*7 x2's) possible moves in the starting position!
- *  Pop Ten: Unsolved. In order for this variant to be solved, all permutations of the starting position full of disks must be solved!
- *  Five-In-A-Row: Solved by me in 2016 editing John Tromp's Fhourstones program. The game ends in a draw when both sides play perfectly.
+ *  Pop 10 rules:
+ *  - To set it up, players fill the bottom row first, continuing until the board is full.
+ *  - There is no particular order in which players drop the disks, regardless of color.
+ *  - The game begins when one player pops their disks from the bottom of the board.
+ *  - If the popped disk is part of a four-in-a-row, the player keeps it and gets another turn.
+ *  - Otherwise, if possible, the player must return it to a different column, and the turn switches.
+ *  - If a player has no legal moves, they must pass their turn unless they have made some moves.
+ *  - The first player to collect ten disks wins; repetition or insufficiency is a draw.
+ *
+ *  Solvability status for 7x6:
+ *  - Original: Solved. The first player wins in 40 plies (half-moves).
+ *  - Misere: Solved. The second player wins in 36 plies.
+ *  - Cylinder: Solved. The first player wins in 38 plies.
+ *  - PopOut: Solved. The first player wins in 20 plies.
+ *  - Pop 10: Unsolved. Depends on the starting position.
  */
 
 #ifndef CONNECT4_H
@@ -59,32 +62,34 @@
 // Use an arbitrary precision integer (-DFTW_INT_WIDTH=128), or the default 64 bits.
 // We only support GCC and Clang; building with other compilers is at your own risk.
 #ifdef FTW_INT_WIDTH
+#if FTW_INT_WIDTH < 64
+#error FTW_INT_WIDTH must be at least 64.
+#endif
 #define FTW_C4_MAX_BITS FTW_INT_WIDTH
 #if FTW_INT_WIDTH == 128 && defined(__SIZEOF_INT128__)
-typedef __uint128_t Board;
+    typedef __uint128_t Board;
 #else
-typedef unsigned _BitInt(FTW_INT_WIDTH) Board;
+    typedef unsigned _BitInt(FTW_INT_WIDTH) Board;
 #endif
 #else
 #define FTW_C4_MAX_BITS 64
-typedef uint64_t Board;
+    typedef uint64_t Board;
 #endif
 
 #define BOARD(_x) (Board)(_x)
 
 #ifdef FTW_LIBDIVIDE
 #ifdef FTW_BRANCHLESS
-static struct libdivide_u64_branchfree_t libdivide_ROWS_P1;
+    static struct libdivide_u64_branchfree_t libdivide_ROWS_P1;
 #else
-static struct libdivide_u64_t libdivide_ROWS_P1;
+    static struct libdivide_u64_t libdivide_ROWS_P1;
 #endif
 #endif
 
 #if FTW_C4_MAX_BITS > 64
-////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
 /// @brief  Counts trailing zeros in an arbitrary bitboard.
-/// @note   Requires a 64-bit system and a supporting compiler.
-////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
 #define FTW_Connect4_ctz(_WORD) \
 static inline unsigned Connect4_ctz(Board _b) \
 { \
@@ -106,9 +111,9 @@ static inline unsigned Connect4_ctz(Board _b) \
 
 FTW_Connect4_ctz(FTW_INT_WIDTH);
 
-///////////////////////////////////////////////////////////
-/// @brief  The population count of an arbitrary bitboard.
-///////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////
+/// @brief  The population count of an arbitrary bitboard, which returns the number of set bits.
+/////////////////////////////////////////////////////////////////////////////////////////////////
 static inline unsigned Connect4_popcnt(Board _b)
 {
     unsigned ones = 0;
@@ -146,16 +151,27 @@ Connect4;
 
 typedef struct
 {
-    uint8_t pops;       // lower 4 bits: P1; upper 4 bits: P2
-    bool phase, turn;   // true: pop phase; false: drop phase
+    uint8_t pops;           // lower 4 bits: P1; upper 4 bits: P2
+    bool phase, turn;       // true: pop phase; false: drop phase
 }
 Connect4_Pop10;
 
 #pragma pack(pop)
 
 #ifdef FTW_XXHASH
-static constexpr size_t C4_SIZE = sizeof(Board) << 1;
+    static constexpr size_t C4_SIZE = sizeof(Board) << 1;
+    static XXH64_hash_t C4_xxhSeed;
+#else
+#if FTW_INT_WIDTH > 64 || defined(FTW_TT_128_BITS) || (FTW_INT_WIDTH == 64 && defined(FTW_TT_128_BITS))
+    static uint64_t C4_SALT_A;
 #endif
+#if FTW_INT_WIDTH > 64
+    static uint64_t C4_SALT_B;
+#endif
+#endif
+
+#define Connect4_dropMask(_mask, _BOT, _ALL) (_mask + _BOT) & (_ALL)
+#define Connect4_popMask(_side) _side & BOT_MASK
 
 static constexpr uint8_t POP10_4ROW = 0x80;             // Marker for a disk that was part of a four-in-a-row
 static constexpr uint8_t POP10_TGT = 10;                // Number of stockpiled disks required to win
@@ -184,9 +200,9 @@ static void (*Connect4_unplay)(Connect4 *const restrict);
 static bool (*Connect4_playable)(const Connect4 *const restrict, const uint8_t);
 static void (*Connect4_moves)(const Connect4 *const restrict);
 static uint8_t (*Connect4_sequence)(const uint8_t);
-static void (*Connect4_generate)(const Connect4 *const restrict, uint8_t[restrict static 1], uint8_t *const restrict);
-static void (*Connect4_generateAll)(const Connect4 *const restrict, uint8_t[restrict static 1], uint8_t *const restrict);
-static void (*Connect4_genNonLosing)(const Connect4 *const restrict, uint8_t[restrict static 1], uint8_t *const restrict);
+static void (*Connect4_generate)(const Connect4 *const restrict, uint8_t[restrict static 4], uint8_t *const restrict);
+static void (*Connect4_generateAll)(const Connect4 *const restrict, uint8_t[restrict static 4], uint8_t *const restrict);
+static void (*Connect4_genNonLosing)(const Connect4 *const restrict, uint8_t[restrict static 4], uint8_t *const restrict);
 static bool (*Connect4_fourInARow)(const Board);
 static Board (*Connect4_fourInARow_threats)(const Board);
 static bool (*Connect4_over)(const Connect4 *const restrict);
@@ -307,6 +323,20 @@ static inline void Connect4_globals_init(void)
 #else
     libdivide_ROWS_P1 = libdivide_u64_gen(ROWS_P1);
 #endif
+#endif
+
+#ifdef FTW_TT_128_BITS
+    {
+        Xoshiro256 xsr256; Xoshiro256_init(&xsr256);
+#ifdef FTW_XXHASH
+        C4_xxhSeed = Xoshiro256ss_next(&xsr256);
+#else
+        C4_SALT_A = Xoshiro256ss_next(&xsr256);
+#if FTW_C4_MAX_BITS > 64
+        C4_SALT_B = Xoshiro256ss_next(&xsr256);
+#endif
+#endif
+    }
 #endif
 
     Connect4_setColMoveOrder();
@@ -524,7 +554,7 @@ static inline void Connect4_popout_moves(const Connect4 *const restrict _C4)
 /// @param _POS Array position.
 /// @param _RNK Move sort rank.
 //////////////////////////////////////////////////////////
-static inline void Connect4_append(uint8_t _arr[restrict static 1], uint8_t *const restrict _num, const uint8_t _MOV, const uint8_t _POS, const uint8_t _RNK)
+static inline void Connect4_append(uint8_t _arr[restrict static 4], uint8_t *const restrict _num, const uint8_t _MOV, const uint8_t _POS, const uint8_t _RNK)
 {
     _arr[(*_num)++] = _MOV;
 
@@ -555,7 +585,7 @@ static inline void Connect4_append(uint8_t _arr[restrict static 1], uint8_t *con
 /// @param  _WND
 /// @param  _SWP Whether to swap the move.
 //////////////////////////////////////////////////////////////////////////
-static inline void Connect4_pop10_append(uint8_t _arr[restrict static 1], uint8_t *const restrict _num, const uint8_t _MOV, const uint8_t _POS, const uint8_t _WND, const bool _SWP)
+static inline void Connect4_pop10_append(uint8_t _arr[restrict static 4], uint8_t *const restrict _num, const uint8_t _MOV, const uint8_t _POS, const uint8_t _WND, const bool _SWP)
 {
     _arr[(*_num)++] = _MOV;
 
@@ -741,7 +771,7 @@ static inline void Connect4_pop10_unpassMove(Connect4 *const restrict _c4, Conne
 ////////////////////////////////////////////////////
 static inline bool Connect4_pop10_passForced(const Connect4 *const restrict _C4, const Connect4_Pop10 *const restrict _P10)
 {
-    return _P10->phase && !(_C4->side & BOT_MASK);
+    return _P10->phase && !(Connect4_popMask(_C4->side));
 }
 
 /////////////////////////////////////////////////
@@ -794,7 +824,7 @@ static inline void Connect4_pop10_unplay(Connect4 *const restrict _c4, Connect4_
 //////////////////////////////////////////////////////
 static inline bool Connect4_droppable(const Connect4 *const restrict _C4, const uint8_t _COL)
 {
-    return !(ALL_COL_MASK << ROWS_P1 * _COL & (_C4->mask + BOT_MASK) & FULL_MASK);
+    return !(ALL_COL_MASK << ROWS_P1 * _COL & Connect4_dropMask(_C4->mask, BOT_MASK, FULL_MASK));
 }
 
 //////////////////////////////////////////////////
@@ -971,7 +1001,7 @@ static inline Board Connect4_cylinder_fourInARow_threats(const Board _S)
 ///////////////////////////////////////////////////
 static inline bool Connect4_original_canWin(const Connect4 *const restrict _C4)
 {
-    Board dropMask = (_C4->mask + BOT_MASK) & ALL_MASK;
+    Board dropMask = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK);
 
     const Board SIDE = _C4->side;
 
@@ -994,7 +1024,7 @@ static inline bool Connect4_original_canWin(const Connect4 *const restrict _C4)
 ////////////////////////////////////////////////////
 static inline bool Connect4_misere_allLose(const Connect4 *const restrict _C4)
 {
-    Board dropMask = (_C4->mask + BOT_MASK) & ALL_MASK;
+    Board dropMask = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK);
 
     const Board SIDE = _C4->side;
 
@@ -1023,7 +1053,7 @@ static inline bool Connect4_popout_canWin(const Connect4 *const restrict _C4)
 
     const Board PL_SIDE = _C4->side;
 
-    for (Board popMask = PL_SIDE & BOT_MASK; popMask; popMask &= popMask - 1)
+    for (Board popMask = Connect4_popMask(PL_SIDE); popMask; popMask &= popMask - 1)
     {
 #if FTW_C4_MAX_BITS > 64
         const Board PL_FALL_COL = (PL_SIDE & COL_MASK << Connect4_ctz(popMask & -popMask)) >> 1 & ALL_MASK;
@@ -1048,7 +1078,7 @@ static inline bool Connect4_popout_popLose(const Connect4 *const restrict _C4)
     const Board PL_SIDE = _C4->side;
     const Board OP_SIDE = PL_SIDE ^ _C4->mask;
 
-    Board popMask = PL_SIDE & BOT_MASK; uint8_t oppWins;
+    Board popMask = Connect4_popMask(PL_SIDE); uint8_t oppWins;
 
 #if FTW_C4_MAX_BITS > 64
     const uint8_t POP_BITS = Connect4_popcnt(popMask);
@@ -1080,13 +1110,14 @@ static inline bool Connect4_popout_popLose(const Connect4 *const restrict _C4)
 //////////////////////////////////////////////////////
 static inline bool Connect4_pop10_canWin(const Board _SIDE, const uint8_t _TGT)
 {
-    return (_SIDE & BOT_MASK) && _TGT == POP10_TGT_M1;
+    return (Connect4_popMask(_SIDE)) && _TGT == POP10_TGT_M1;
 }
 
 ////////////////////////////////////////////
 /// @brief  Is the board full of pieces?
 /// @param  _C4
 /// @return `true` if full; `false` if not.
+/// @note   Also acts as a ply limiter.
 ////////////////////////////////////////////
 static inline bool Connect4_full(const Connect4 *const restrict _C4)
 {
@@ -1127,9 +1158,9 @@ static inline bool Connect4_pop10_over(const Connect4_Pop10 *const restrict _P10
 static inline uint8_t Connect4_nonFullCols(const Connect4 *const restrict _C4)
 {
 #if FTW_C4_MAX_BITS > 64
-    return COLS - Connect4_popcnt((_C4->mask + BOT_MASK) & FULL_MASK);
+    return COLS - Connect4_popcnt(Connect4_dropMask(_C4->mask, BOT_MASK, FULL_MASK));
 #else
-    return COLS - stdc_count_ones_ull((_C4->mask + BOT_MASK) & FULL_MASK);
+    return COLS - stdc_count_ones_ull(Connect4_dropMask(_C4->mask, BOT_MASK, FULL_MASK));
 #endif
 }
 
@@ -1143,7 +1174,7 @@ static inline bool Connect4_pop10_draw(const Connect4 *const restrict _C4, const
     const Board OP_SIDE = PL_SIDE ^ _C4->mask;
 
 #if FTW_C4_MAX_BITS > 64
-    const uint8_t PL_BOARD_COUNT = Connect4_popcnt(PL_SIDE) - 3
+    const uint8_t PL_BOARD_COUNT = Connect4_popcnt(PL_SIDE) - 3;
     const uint8_t OP_BOARD_COUNT = Connect4_popcnt(OP_SIDE) - 3;
 #else
     const uint8_t PL_BOARD_COUNT = stdc_count_ones_ull(PL_SIDE) - 3;
@@ -1162,7 +1193,7 @@ static inline bool Connect4_pop10_draw(const Connect4 *const restrict _C4, const
 /// @param  _arr    Output array to store the moves.
 /// @param  _num    Output variable to save this count.
 /////////////////////////////////////////////////////////////
-static inline void Connect4_original_genMoveBody(Board _mask, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+static inline void Connect4_original_genMoveBody(Board _mask, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
 {
     while (_mask)
     {
@@ -1200,7 +1231,7 @@ static inline void Connect4_original_genMoveBody(Board _mask, uint8_t _arr[restr
 /// @param  _arr
 /// @param  _num
 /////////////////////////////////////////////////////////////////
-static inline void Connect4_popout_genMoveBody(Board _mask, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+static inline void Connect4_popout_genMoveBody(Board _mask, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
 {
     while (_mask)
     {
@@ -1238,7 +1269,7 @@ static inline void Connect4_popout_genMoveBody(Board _mask, uint8_t _arr[restric
 /// @param  _arr
 /// @param  _num
 //////////////////////////////////////////////////////////////
-static inline void Connect4_original_genMoveBodyOrder(Board _mask, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+static inline void Connect4_original_genMoveBodyOrder(Board _mask, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
 {
     while (_mask)
     {
@@ -1276,7 +1307,7 @@ static inline void Connect4_original_genMoveBodyOrder(Board _mask, uint8_t _arr[
 /// @param  _arr
 /// @param  _num
 //////////////////////////////////////////////////////////////////////
-static inline void Connect4_popout_genMoveBodyOrder(Board _mask, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+static inline void Connect4_popout_genMoveBodyOrder(Board _mask, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
 {
     const uint8_t NUM = *_num;
 
@@ -1317,7 +1348,7 @@ static inline void Connect4_popout_genMoveBodyOrder(Board _mask, uint8_t _arr[re
 /// @param  _arr
 /// @param  _num
 /////////////////////////////////////////////////////////////////////
-static inline void Connect4_pop10_genMoveBodyOrder(const Board _SIDE, Board _mask, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+static inline void Connect4_pop10_genMoveBodyOrder(const Board _SIDE, Board _mask, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
 {
     uint8_t window = 0;
 
@@ -1366,9 +1397,9 @@ static inline void Connect4_pop10_genMoveBodyOrder(const Board _SIDE, Board _mas
 /// @param  _arr
 /// @param  _num
 ///////////////////////////////////////////////////////////////////
-static inline void Connect4_original_generate(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+static inline void Connect4_original_generate(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
 {
-    Board dropMask = (_C4->mask + BOT_MASK) & ALL_MASK; *_num = 0;
+    Board dropMask = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK); *_num = 0;
 
     const Board PL_THREATS = Connect4_fourInARow_threats(_C4->side) & dropMask;
     const Board OP_THREATS = Connect4_fourInARow_threats(_C4->side ^ _C4->mask) & dropMask;
@@ -1384,9 +1415,9 @@ static inline void Connect4_original_generate(const Connect4 *const restrict _C4
 /// @param  _arr
 /// @param  _num
 ////////////////////////////////////////////////////////////////
-static inline void Connect4_misere_generate(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+static inline void Connect4_misere_generate(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
 {
-    Board dropMask = (_C4->mask + BOT_MASK) & ALL_MASK; *_num = 0;
+    Board dropMask = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK); *_num = 0;
 
     const Board PL_THREATS = Connect4_fourInARow_threats(_C4->side) & dropMask;
 
@@ -1398,10 +1429,10 @@ static inline void Connect4_misere_generate(const Connect4 *const restrict _C4, 
 //////////////////////////////////////////////////////////
 /// @brief  Compiles a list of moves in Connect 4 PopOut.
 //////////////////////////////////////////////////////////
-static inline void Connect4_popout_generate(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+static inline void Connect4_popout_generate(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
 {
     Connect4_original_generate(_C4, _arr, _num);
-    Connect4_popout_genMoveBody(_C4->side & BOT_MASK, _arr, _num);
+    Connect4_popout_genMoveBody(Connect4_popMask(_C4->side), _arr, _num);
 }
 
 ///////////////////////////////////////
@@ -1411,17 +1442,17 @@ static inline void Connect4_popout_generate(const Connect4 *const restrict _C4, 
 /// @param  _arr
 /// @param  _num
 ///////////////////////////////////////
-static inline void Connect4_pop10_generate(const Connect4 *const restrict _C4, Connect4_Pop10 *const restrict _p10, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+static inline void Connect4_pop10_generate(const Connect4 *const restrict _C4, Connect4_Pop10 *const restrict _p10, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
 {
     *_num = 0;
 
     if (_p10->phase)
     {
-        Connect4_pop10_passForced(_C4, _p10) ? _arr[(*_num)++] = POP10_PASS : Connect4_pop10_genMoveBodyOrder(_C4->side, _C4->side & BOT_MASK, _arr, _num);
+        Connect4_pop10_passForced(_C4, _p10) ? _arr[(*_num)++] = POP10_PASS : Connect4_pop10_genMoveBodyOrder(_C4->side, Connect4_popMask(_C4->side), _arr, _num);
     }
     else
     {
-        Board dropMask = (_C4->mask + BOT_MASK) & ALL_MASK;
+        Board dropMask = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK);
 
         Connect4_nonFullCols(_C4) > 1 ? dropMask &= ~(COL_MASK << (ROWS_P1 * (_C4->hist[_C4->plies - 1] - COLS))) : FTW_VOID_NOP;
         Connect4_original_genMoveBody(dropMask, _arr, _num);
@@ -1434,9 +1465,9 @@ static inline void Connect4_pop10_generate(const Connect4 *const restrict _C4, C
 /// @param  _arr
 /// @param  _num
 ////////////////////////////////////////////////////////////////////////////////////
-static inline void Connect4_original_generateAll(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+static inline void Connect4_original_generateAll(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
 {
-    Board dropMask = (_C4->mask + BOT_MASK) & ALL_MASK; *_num = 0;
+    Board dropMask = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK); *_num = 0;
 
     Connect4_original_genMoveBody(dropMask, _arr, _num);
 }
@@ -1447,19 +1478,19 @@ static inline void Connect4_original_generateAll(const Connect4 *const restrict 
 /// @param  _arr
 /// @param  _num
 ///////////////////////////////////////////////////////////////////
-static inline void Connect4_popout_generateAll(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+static inline void Connect4_popout_generateAll(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
 {
     Connect4_original_generateAll(_C4, _arr, _num);
-    Connect4_popout_genMoveBody(_C4->side & BOT_MASK, _arr, _num);
+    Connect4_popout_genMoveBody(Connect4_popMask(_C4->side), _arr, _num);
 }
 
 //////////////////////////////////////////////////////////////////////
 /// @brief      Non-losing version of `Connect4_original_generate()`.
 /// @details    Reduces node evaluations for minimax search.
 //////////////////////////////////////////////////////////////////////
-static inline void Connect4_original_genNonLosing(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+static inline void Connect4_original_genNonLosing(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
 {
-    Board dropMask = (_C4->mask + BOT_MASK) & ALL_MASK; *_num = 0;
+    Board dropMask = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK); *_num = 0;
     Board opThreats = Connect4_fourInARow_threats(_C4->side ^ _C4->mask) & dropMask;
 
 #if FTW_C4_MAX_BITS > 64 // cannot avoid losing; limit to 1 branch
@@ -1479,9 +1510,9 @@ static inline void Connect4_original_genNonLosing(const Connect4 *const restrict
 /// @param  _arr
 /// @param  _num
 //////////////////////////////////////////////////////////////////
-static inline void Connect4_misere_genNonLosing(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+static inline void Connect4_misere_genNonLosing(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
 {
-    Board dropMask = (_C4->mask + BOT_MASK) & ALL_MASK; *_num = 0;
+    Board dropMask = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK); *_num = 0;
 
     const Board PL_THREATS = Connect4_fourInARow_threats(_C4->side) & dropMask;
 
@@ -1496,10 +1527,10 @@ static inline void Connect4_misere_genNonLosing(const Connect4 *const restrict _
 /// @param  _arr
 /// @param  _num
 //////////////////////////////////////////////////////////
-static inline void Connect4_popout_genNonLosing(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 1], uint8_t *const restrict _num)
+static inline void Connect4_popout_genNonLosing(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
 {
     Connect4_original_genNonLosing(_C4, _arr, _num);
-    Connect4_popout_genMoveBodyOrder(_C4->side & BOT_MASK, _arr, _num);
+    Connect4_popout_genMoveBodyOrder(Connect4_popMask(_C4->side), _arr, _num);
 }
 
 /////////////////////////////////////////////////////
@@ -1519,7 +1550,7 @@ static inline char Connect4_noMovePolicy(const Connect4 *const restrict _C4)
 /////////////////////////////////////////////////////////
 static inline char Connect4_original_policy(const Connect4 *const restrict _C4)
 {
-    const Board DROP_MASK = (_C4->mask + BOT_MASK) & ALL_MASK;
+    const Board DROP_MASK = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK);
     const Board PL_THREATS = Connect4_fourInARow_threats(_C4->side) & DROP_MASK;
     const Board OP_THREATS = Connect4_fourInARow_threats(_C4->side ^ _C4->mask) & DROP_MASK;
 
@@ -1555,9 +1586,9 @@ static inline char Connect4_popout_policy(const Connect4 *const restrict _C4)
     uint8_t policies[MOVE_BOUNDS];
     uint8_t polyCnt = 0;
 
-    Connect4_original_genMoveBody(Connect4_fourInARow_threats(_C4->side) & (_C4->mask + BOT_MASK) & ALL_MASK, policies, &polyCnt);
+    Connect4_original_genMoveBody(Connect4_fourInARow_threats(_C4->side) & Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK), policies, &polyCnt);
 
-    for (Board sideBotMask = _C4->side & BOT_MASK; sideBotMask; sideBotMask &= sideBotMask - 1)
+    for (Board sideBotMask = Connect4_popMask(_C4->side); sideBotMask; sideBotMask &= sideBotMask - 1)
     {
 #if FTW_C4_MAX_BITS > 64
         const Board FALL_COL = (_C4->side & COL_MASK << Connect4_ctz(sideBotMask & -sideBotMask)) >> 1 & ALL_MASK;
@@ -1752,17 +1783,6 @@ static inline int Connect4_pop10_winner(const Connect4_Pop10 *const restrict _P1
     return -1;
 }
 
-////////////////////////////////////////////////////////////////
-/// @brief  The SplitMix64 finalizer on Connect 4's Board type.
-////////////////////////////////////////////////////////////////
-static inline uint64_t Connect4_SplitMix64(Board _b)
-{
-    _b = (_b ^ _b >> 30) * 0xbf58476d1ce4e5b9;
-    _b = (_b ^ _b >> 27) * 0x94d049bb133111eb;
-
-    return _b ^ _b >> 31;
-}
-
 //////////////////////////////////////////////////////////////////
 /// @brief  Obtains a perfect (collision-free) key for Connect 4.
 /// @param  _C4
@@ -1772,13 +1792,59 @@ static inline Board Connect4_key(const Connect4 *const restrict _C4)
     return _C4->mask + _C4->side;
 }
 
+#ifdef FTW_AI_DEBUG
+/**
+ * @brief Reconstruct the bitboards represented by a perfect Connect 4 key.
+ *
+ * Within one column of height `h`, `mask` is `(1 << h) - 1` and
+ * `side` is a subset of that mask. Consequently, `mask + side` occupies the
+ * disjoint interval `[2^h - 1, 2^(h + 1) - 2]`; this makes the column height
+ * and both bitboards recoverable without move history.
+ *
+ * @param _c4 State receiving the decoded bitboards. Its existing `hist`
+ *            pointer is preserved, and `plies` is reset to zero.
+ * @param _KEY Raw key returned by Connect4_key().
+ */
+static inline void Connect4_fromKey(Connect4 *const restrict _c4,
+                                    const Board _KEY)
+{
+    Board mask = 0, side = 0;
+
+    for (uint8_t column = 0; column < COLS; column++)
+    {
+        const uint8_t OFFSET = ROWS_P1 * column;
+        const Board COLUMN_KEY = _KEY >> OFFSET & ALL_COL_MASK;
+        Board value = COLUMN_KEY + 1;
+        uint8_t height = 0;
+
+        while (value >>= 1)
+        {
+            height++;
+        }
+
+        assert(height <= ROWS);
+        const Board COLUMN_MASK = (BOARD(1) << height) - 1;
+        const Board COLUMN_SIDE = COLUMN_KEY - COLUMN_MASK;
+        assert(!(COLUMN_SIDE & ~COLUMN_MASK));
+
+        mask |= COLUMN_MASK << OFFSET;
+        side |= COLUMN_SIDE << OFFSET;
+    }
+
+    _c4->mask = mask;
+    _c4->side = side;
+    _c4->plies = 0;
+    assert(Connect4_key(_c4) == _KEY);
+}
+#endif
+
 ////////////////////////////////////////////////
 /// @brief  Hash keys for Pop 10's state field.
 /// @param  _P10
 ////////////////////////////////////////////////
 static inline Board Connect4_pop10_stateKey(const Connect4_Pop10 *const restrict _P10)
 {
-    return _P10->turn | _P10->phase << 1 | _P10->pops << 2;
+    return _P10->turn | (Board)(_P10->phase) << 1 | (Board)(_P10->pops) << 2;
 }
 
 ///////////////////////////////
@@ -1794,18 +1860,44 @@ static inline Board Connect4_pop10_key(const Connect4_Pop10 *const restrict _P10
 //////////////////////////////////////////////////////////////
 /// @brief  Connect 4 lock function for transposition tables.
 /// @param  _C4
-/// @note   Returns the key unless board > 64 bits.
+/// @note   Returns the perfect key unless board > 64 bits.
 //////////////////////////////////////////////////////////////
-static inline uint64_t Connect4_lock(const Connect4 *const restrict _C4)
+static inline TTLock Connect4_lock(const Connect4 *const restrict _C4)
 {
-#if FTW_C4_MAX_BITS > 64
+#ifdef FTW_TT_128_BITS
+#if FTW_C4_MAX_BITS > 128
 #ifdef FTW_XXHASH
-    return XXH3_64bits(_C4, C4_SIZE);
-#else
-    return Connect4_SplitMix64(Connect4_key(_C4));
+    const XXH128_hash_t LOCK = XXH3_128bits_withSeed(_C4, C4_SIZE, C4_xxhSeed);
+    return LOCK.low64 | (TTLock)(LOCK.high64) << 64;
+#else // Shrink to 128 bits (MurmurHash3)
+    const Murmur128 LOCK = Murmur3_x64_128(_C4, C4_SIZE, C4_SALT_A);
+    return LOCK.h2 | (TTLock)(LOCK.h1) << 64;
 #endif
 #else
+#ifdef FTW_XXHASH
+    const XXH128_hash_t LOCK = XXH3_128bits_withSeed(_C4, C4_SIZE, C4_xxhSeed);
+    return LOCK.low64 | (TTLock)(LOCK.high64) << 64;
+#else
     return Connect4_key(_C4);
+#endif
+#endif
+#else
+#if FTW_C4_MAX_BITS > 64
+#ifdef FTW_XXHASH
+    return XXH3_64bits_withSeed(_C4, C4_SIZE, C4_xxhSeed);
+#else // 128 bits -> 64 bits (SplitMix64)
+    const Board B_KEY_RAW = Connect4_key(_C4);
+    const TTLock B_KEY_HI64 = B_KEY_RAW >> 64;
+    const TTLock B_KEY_LO64 = B_KEY_RAW;
+    return SplitMix64_finalize((B_KEY_HI64 + C4_SALT_A) ^ SplitMix64_finalize(B_KEY_LO64 + C4_SALT_B));
+#endif
+#else
+#ifdef FTW_XXHASH
+    return XXH3_64bits_withSeed(_C4, C4_SIZE, C4_xxhSeed);
+#else
+    return Connect4_key(_C4);
+#endif
+#endif
 #endif
 }
 

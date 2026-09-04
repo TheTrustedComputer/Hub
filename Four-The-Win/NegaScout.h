@@ -25,8 +25,8 @@ static constexpr int16_t NS_DRAW = 0;
 static constexpr uint16_t NS_MAX_DEPTH = INT16_MAX;
 
 static TransTable NS_table;
-static PathStack NS_stack;
-static PathGraph NS_graph;
+//static PathStack NS_stack;
+//static PathGraph NS_graph;
 static PathTable NS_path;
 static uint64_t *restrict NS_hist;
 static struct timespec NS_str, NS_end;
@@ -161,9 +161,7 @@ static inline int16_t NegaScout_Connect4_original_search(Connect4 *const restric
         return NS_DRAW;
     }
 
-    const uint64_t LOCK = Connect4_lock(_c4);
-
-    int16_t ttVal; uint8_t ttMov;
+    const TTLock LOCK = Connect4_lock(_c4); int16_t ttVal; uint8_t ttMov;
 
     TransBucket *const restrict tb = &NS_table.bucket[TransTable_index(&NS_table, LOCK)];
 
@@ -237,9 +235,7 @@ static inline int16_t NegaScout_Connect4_misere_search(Connect4 *const restrict 
         return NS_DRAW;
     }
 
-    const uint64_t LOCK = Connect4_lock(_c4);
-
-    int16_t ttVal; uint8_t ttMov;
+    const TTLock LOCK = Connect4_lock(_c4); int16_t ttVal; uint8_t ttMov;
 
     TransBucket *const restrict tb = &NS_table.bucket[TransTable_index(&NS_table, LOCK)];
 
@@ -319,11 +315,23 @@ static inline int16_t NegaScout_Connect4_popout_search(Connect4 *const restrict 
         return -NS_PROG;
     }
 
-    const uint64_t KEY = Connect4_key(_c4);
+    const Board KEY = Connect4_key(_c4);
+#ifdef FTW_TT_128_BITS
+#ifdef FTW_XXHASH
+    const XXH128_hash_t HASH = XXH3_128bits_withSeed(&_c4->plies, sizeof(_c4->plies), C4_xxhSeed);
+    const TTLock MIX = HASH.low64 | (TTLock)(HASH.high64) << 64;
+#else
+    const Murmur128 HASH = Murmur3_x64_128bits(&_c4->plies, sizeof(_c4->plies), C4_SALT_A);
+    const TTLock MIX = HASH.h2 | (TTLock)(HASH.h1) << 64;
+#endif
+#else
+#ifdef FTW_XXHASH
+    const uint64_t MIX = XXH3_64bits_withSeed(&_c4->plies, sizeof(_c4->plies), C4_xxhSeed);
+#else
     const uint64_t MIX = SplitMix64_finalize(_c4->plies);
-    const uint64_t LOCK = KEY ^ MIX;
-
-    int16_t ttVal; uint8_t ttMov;
+#endif
+#endif
+    const TTLock LOCK = KEY ^ MIX; int16_t ttVal; uint8_t ttMov;
 
     TransBucket *const restrict tb = &NS_table.bucket[TransTable_index(&NS_table, LOCK)];
 
@@ -332,19 +340,17 @@ static inline int16_t NegaScout_Connect4_popout_search(Connect4 *const restrict 
         return ttVal;
     }
 
-    PathEntry *const restrict pe = PathTable_probe(&NS_path, KEY);
-
-    pe->key = KEY;
+    PathEntry *const restrict pe = PathTable_probe(&NS_path, KEY); pe->key = KEY;
 
     if (PathEntry_backedge(pe, KEY))
     {
-        PathGraph_addEdge(&NS_graph, &NS_path, pe, NS_stack.data[NS_stack.top], MIX);
+        //PathGraph_addEdge(&NS_graph, &NS_path, pe, NS_stack.data[NS_stack.top], MIX);
 
-        return NS_DRAW;
+        return NS_DRAW; // Not mathematically correct, but avoids infinite descent
     }
 
     PathEntry_push(pe);
-    PathStack_push(&NS_stack, KEY);
+    //PathStack_push(&NS_stack, KEY);
 
     int16_t curr, best = -NS_WIN_VAL;
     uint8_t movArr[MOVE_BOUNDS], movCnt, move = UINT8_MAX;
@@ -387,7 +393,7 @@ static inline int16_t NegaScout_Connect4_popout_search(Connect4 *const restrict 
 
     TransBucket_store(tb, LOCK, best, _D, OLD_A, _B, move);
     PathEntry_pop(pe);
-    PathStack_pop(&NS_stack);
+    //PathStack_pop(&NS_stack);
 
     return best;
 }
@@ -415,11 +421,23 @@ static inline int16_t NegaScout_Connect4_pop10_search(Connect4 *const restrict _
         return -NS_PROG;
     }
 
-    const uint64_t KEY = Connect4_key(_c4) | Connect4_pop10_key(_p10);
+    const Board KEY = Connect4_key(_c4) | Connect4_pop10_key(_p10);
+#ifdef FTW_TT_128_BITS
+#ifdef FTW_XXHASH
+    const XXH128_hash_t HASH = XXH3_128bits_withSeed(&_c4->plies, sizeof(_c4->plies), C4_xxhSeed);
+    const TTLock MIX = HASH.low64 | (TTLock)(HASH.high64) << 64;
+#else
+    const Murmur128 HASH = Murmur3_x64_128bits(&_c4->plies, sizeof(_c4->plies), C4_SALT_A);
+    const TTLock MIX = HASH.h2 | (TTLock)(HASH.h1) << 64;
+#endif
+#else
+#ifdef FTW_XXHASH
+    const uint64_t MIX = XXH3_64bits_withSeed(&_c4->plies, sizeof(_c4->plies), C4_xxhSeed);
+#else
     const uint64_t MIX = SplitMix64_finalize(_c4->plies);
-    const uint64_t LOCK = KEY ^ MIX;
-
-    int16_t ttVal; uint8_t ttMov;
+#endif
+#endif
+    const TTLock LOCK = KEY ^ MIX; int16_t ttVal; uint8_t ttMov;
 
     TransBucket *const restrict tb = &NS_table.bucket[TransTable_index(&NS_table, LOCK)];
 
@@ -428,19 +446,17 @@ static inline int16_t NegaScout_Connect4_pop10_search(Connect4 *const restrict _
         return ttVal;
     }
 
-    PathEntry *const restrict pe = PathTable_probe(&NS_path, KEY);
-
-    pe->key = KEY;
+    PathEntry *const restrict pe = PathTable_probe(&NS_path, KEY); pe->key = KEY;
 
     if (PathEntry_backedge(pe, KEY))
     {
-        PathGraph_addEdge(&NS_graph, &NS_path, pe, NS_stack.data[NS_stack.top], MIX);
+        //PathGraph_addEdge(&NS_graph, &NS_path, pe, NS_stack.data[NS_stack.top], MIX);
 
         return NS_DRAW;
     }
 
     PathEntry_push(pe);
-    PathStack_push(&NS_stack, KEY);
+    //PathStack_push(&NS_stack, KEY);
 
     int16_t curr, best = -NS_WIN_VAL;
     uint8_t movArr[MOVE_BOUNDS], movCnt, move = UINT8_MAX;
@@ -493,7 +509,7 @@ static inline int16_t NegaScout_Connect4_pop10_search(Connect4 *const restrict _
 
     TransBucket_store(tb, LOCK, best, _D, OLD_A, _B, move);
     PathEntry_pop(pe);
-    PathStack_pop(&NS_stack);
+    //PathStack_pop(&NS_stack);
 
     return best;
 }
@@ -526,7 +542,7 @@ static inline int16_t NegaScout_Make7_search(const Make7 *const restrict _M7, co
 
     int16_t ttVal; uint8_t ttMov;
 
-    const uint64_t LOCK = Make7_lock(_M7);
+    const TTLock LOCK = Make7_lock(_M7);
 
     TransBucket *const restrict tb = &NS_table.bucket[TransTable_index(&NS_table, LOCK)];
 
@@ -627,7 +643,8 @@ static inline Result NegaScout_Connect4_popout_iterative(Connect4 *const restric
     const uint16_t POP_DEPTH = BOARD_AREA < 128 ? UINT8_MAX : NS_MAX_DEPTH;
     const uint16_t DEPTH = _c4->plies > POP_DEPTH ? _c4->plies : POP_DEPTH;
 
-    uint64_t nodePrev = 0, nodeDelta = 0; int16_t val = NS_DRAW;
+    // uint64_t nodePrev = 0, nodeDelta = 0; int16_t val = NS_DRAW;
+    int16_t val = NS_DRAW, vals[2] = { -NS_PROG, NS_PROG };
 
     TransTable_reset(&NS_table);
     NegaScout_History_randomize();
@@ -642,24 +659,26 @@ static inline Result NegaScout_Connect4_popout_iterative(Connect4 *const restric
             goto NegaScout_Connect4_popout_iterative_solved;
         }
 
-        if (NS_graph.size)
+        /*if (NS_graph.size)
         {
             PathGraph_Tarjan(&NS_graph, &NS_table);
             PathGraph_destroyEdges(&NS_graph);
-        }
+        }*/
 
-        PathGraph_age(&NS_graph);
-        NegaScout_History_decay();
+        //PathGraph_age(&NS_graph);
+        //const uint64_t DELTA = NS_nodes - nodePrev;
 
-        const uint64_t DELTA = NS_nodes - nodePrev;
+        vals[i & 1] = val;
 
-        if (val == NS_DRAW && DELTA == nodeDelta)
+        if (val == NS_DRAW && vals[0] == vals[1]) // || DELTA == nodeDelta))
         {
             goto NegaScout_Connect4_popout_iterative_solved;
         }
 
-        nodePrev = NS_nodes;
-        nodeDelta = DELTA;
+        //nodePrev = NS_nodes;
+        //nodeDelta = DELTA;
+
+        NegaScout_History_decay();
     }
 
 NegaScout_Connect4_popout_iterative_solved:
@@ -682,7 +701,8 @@ static inline Result NegaScout_Connect4_pop10_iterative(Connect4 *const restrict
 
     const uint16_t DEPTH = _c4->plies > NS_MAX_DEPTH ? _c4->plies : NS_MAX_DEPTH;
 
-    uint64_t nodePrev = 0, nodeDelta = 0; int16_t val = NS_DRAW;
+    //uint64_t nodePrev = 0, nodeDelta = 0; int16_t val = NS_DRAW;
+    int16_t val = NS_DRAW, vals[2] = { -NS_PROG, NS_PROG };
 
     TransTable_reset(&NS_table);
     NegaScout_History_randomize();
@@ -702,24 +722,32 @@ static inline Result NegaScout_Connect4_pop10_iterative(Connect4 *const restrict
             goto NegaScout_Connect4_pop10_iterative_solved;
         }
 
-        if (NS_graph.size)
+        /*if (NS_graph.size)
         {
             PathGraph_Tarjan(&NS_graph, &NS_table);
             PathGraph_destroyEdges(&NS_graph);
         }
 
-        PathGraph_age(&NS_graph);
-        NegaScout_History_decay();
+        PathGraph_age(&NS_graph);*/
 
-        const uint64_t DELTA = NS_nodes - nodePrev;
+        /*const uint64_t DELTA = NS_nodes - nodePrev;
 
         if (!val && DELTA == nodeDelta)
         {
             goto NegaScout_Connect4_pop10_iterative_solved;
+        }*/
+
+        vals[i & 1] = val;
+
+        if (val == NS_DRAW && vals[0] == vals[1])
+        {
+            goto NegaScout_Connect4_pop10_iterative_solved;
         }
 
-        nodePrev = NS_nodes;
-        nodeDelta = DELTA;
+        /*nodePrev = NS_nodes;
+        nodeDelta = DELTA;*/
+
+        NegaScout_History_decay();
     }
 
 NegaScout_Connect4_pop10_iterative_solved:
@@ -1353,7 +1381,7 @@ static inline Result NegaScout_Make7_results(const Make7 *const restrict _M7, co
         m7Res[i] = RESULT_NULL;
     }
 
-    Make7 m7Copy = *_M7; uint64_t m7Key;
+    uint64_t m7Key;
 
     for (i = 0; i < 3; i++)
     {
@@ -1361,21 +1389,23 @@ static inline Result NegaScout_Make7_results(const Make7 *const restrict _M7, co
         {
             res = &m7Res[j] + (i * MAKE7_SIZE);
 
-            if (Make7_droppable(&m7Copy, i, j))
-            {
-                Make7_drop(&m7Copy, i, j);
+            Make7 copyM7 = *_M7;
 
-                if (Make7_targetSum(&m7Copy))
+            if (Make7_droppable(&copyM7, i, j))
+            {
+                Make7_drop(&copyM7, i, j);
+
+                if (Make7_targetSum(&copyM7))
                 {
                     *res = RESULT_WIN;
                 }
                 else
                 {
-                    m7Key = Make7_partKey(&m7Copy);
+                    m7Key = Make7_partKey(&copyM7);
 #ifdef FTW_SQLITE
-                    if (!SQLite_Make7_query(database, m7Key, m7Copy.tile1, m7Copy.tile2, M7_targetMethod, res))
+                    if (!SQLite_Make7_query(database, m7Key, copyM7.tile1, copyM7.tile2, M7_targetMode, res))
 #else
-                    uint64_t t1Key = m7Copy.tile1, t2Key = m7Copy.tile2;
+                    uint64_t t1Key = copyM7.tile1, t2Key = copyM7.tile2;
 
                     Make7_canonicalize(m7Key, t1Key, t2Key, &m7Key, &t1Key, &t2Key);
                     *res = ResultRing_query(m7Key, t1Key, t2Key);
@@ -1383,9 +1413,9 @@ static inline Result NegaScout_Make7_results(const Make7 *const restrict _M7, co
                     if (res->wdl == NULL_CHAR)
 #endif
                     {
-                        *res = NegaScout_Make7_iterative(&m7Copy, false);
+                        *res = NegaScout_Make7_iterative(&copyM7, false);
 #ifdef FTW_SQLITE
-                        SQLite_Make7_insert(database, m7Key, m7Copy.tile1, m7Copy.tile2, M7_targetMethod, res);
+                        SQLite_Make7_insert(database, m7Key, copyM7.tile1, copyM7.tile2, M7_targetMode, res);
 #else
                         ResultRing_insert(m7Key, t1Key, t2Key, *res);
 #endif
@@ -1415,7 +1445,6 @@ static inline Result NegaScout_Make7_results(const Make7 *const restrict _M7, co
                 }
 
                 fflush(stdout);
-                m7Copy = *_M7;
             }
         }
     }
@@ -1423,7 +1452,7 @@ static inline Result NegaScout_Make7_results(const Make7 *const restrict _M7, co
     const Result M7_BEST = Result_best(m7Res, MAKE7_SIZE_X3);
 
 #ifdef FTW_SQLITE
-    SQLite_Make7_insert(database, Make7_partKey(_M7), _M7->tile1, _M7->tile2, M7_targetMethod, &M7_BEST);
+    SQLite_Make7_insert(database, Make7_partKey(_M7), _M7->tile1, _M7->tile2, M7_targetMode, &M7_BEST);
 #else
     uint64_t m7pKey = Make7_partKey(_M7), m7t1Key = _M7->tile1, m7t2Key = _M7->tile2;
 
@@ -1504,15 +1533,15 @@ static inline void NegaScout_Connect4_PGO(void)
     struct timespec profStart, profEnd;
     Connect4 profC4; Connect4_Pop10 profP10; Make7 profM7;
 
-    constexpr uint8_t PGO_DEPS[5] = { 12, 12, 12, 10, 11 };
+    constexpr uint8_t PGO_DEPS[5] = { 12, 12, 12, 10, 11};
 
     TransTable_init(&NS_table, TT_BASE_SIZE);
     PathTable_init(&NS_path, UINT16_MAX);
-    PathStack_init(&NS_stack);
-    PathGraph_init(&NS_graph);
+    //PathStack_init(&NS_stack);
+    //PathGraph_init(&NS_graph);
     Xoshiro128_init(&g_rng);
 
-    NS_graph.searchId++;
+    //NS_graph.searchId++;
 
     FourTheWin_monoTime(&profStart);
 
@@ -1578,8 +1607,8 @@ static inline void NegaScout_Connect4_PGO(void)
     FourTheWin_monoTime(&profEnd);
     TransTable_destroy(&NS_table);
     PathTable_destroy(&NS_path);
-    PathStack_destroy(&NS_stack);
-    PathGraph_destroy(&NS_graph);
+    //PathStack_destroy(&NS_stack);
+    //PathGraph_destroy(&NS_graph);
     printf(FTW_STR_PGO_END, (double)(profEnd.tv_sec - profStart.tv_sec) + (double)(profEnd.tv_nsec - profStart.tv_nsec) / 1e9);
 }
 
@@ -1601,8 +1630,8 @@ static inline void NegaScout_Make7_PGO(void)
     constexpr uint8_t TOTAL_ROUNDS = 250;
     constexpr uint8_t HALF_ROUNDS = TOTAL_ROUNDS / 2;
 
-    M7_targetMethod = true;
-    Make7_setTargetMethod();
+    M7_targetMode = true;
+    Make7_setTargetMode();
 
     bool methodNotDone = true;
 
@@ -1610,8 +1639,8 @@ static inline void NegaScout_Make7_PGO(void)
     {
         if (methodNotDone && i >= HALF_ROUNDS)
         {
-            M7_targetMethod = methodNotDone = false;
-            Make7_setTargetMethod();
+            M7_targetMode = methodNotDone = false;
+            Make7_setTargetMode();
         }
 
         while (!Make7_over(&profM7))

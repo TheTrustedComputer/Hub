@@ -62,7 +62,7 @@ static inline void Interface_help(void)
     puts(" size W H   Set the game board dimensions to W x H (Connect 4).");
     printf(" solve      Solve this position. %s: s.\n", FTW_STR_SHORT_ALIAS);
     puts(" table T    Adjust the transposition table size (T = [inc/dec]).");
-    printf(" tgwin      Toggle the Make 7 win method (%s/%s).\n", FTW_STR_EXACT, FTW_STR_WINDOWING);
+    printf(" tgwin      Toggle the Make 7 win mode (%s/%s).\n", FTW_STR_EXACT, FTW_STR_WINDOW);
     puts(" tiles      Obtain the remaining tiles per player (Make 7).");
     printf(" undo       Undo the last move. %s: u.\n", FTW_STR_SHORT_ALIAS);
     printf(" view       View solutions for each move. %s: v.\n", FTW_STR_SHORT_ALIAS);
@@ -94,22 +94,23 @@ static inline bool Interface_findShortCmd(const char *const restrict _CMD, const
 ///////////////////////////////////////////////////
 /// @brief  Lists legal moves in a Connect 4 game.
 /// @param  _C4
-/// @param  _CP
-/// @param  _POP
+/// @param  _PT
+/// @param  _POPOUT
+/// @param  _POP10
 ///////////////////////////////////////////////////
-static inline void Interface_Connect4_list(const Connect4 *const restrict _C4, const Connect4_Pop10 *const restrict _CP, const bool _POPOUT, const bool _POP10)
+static inline void Interface_Connect4_list(const Connect4 *const restrict _C4, const Connect4_Pop10 *const restrict _PT, const bool _POPOUT, const bool _POP10)
 {
     uint8_t i;
 
     if (_POP10)
     {
-        if (Connect4_pop10_passForced(_C4, _CP))
+        if (Connect4_pop10_passForced(_C4, _PT))
         {
             putchar(POP10_PASS_CHR);
         }
         else
         {
-            if (_CP->phase)
+            if (_PT->phase)
             {
                 for (i = 0; i < COLS; i++)
                 {
@@ -156,6 +157,10 @@ static inline void Interface_Connect4_list(const Connect4 *const restrict _C4, c
     putchar('\n');
 }
 
+////////////////////////////////////////////////
+/// @brief  Lists legal moves in a Make 7 game.
+/// @param  _M7
+////////////////////////////////////////////////
 static inline void Interface_Make7_list(const Make7 *const restrict _M7)
 {
     bool hasMoves = false;
@@ -193,32 +198,32 @@ static inline void Interface_Make7_moves(const Make7 *const restrict _M7)
 
 ////////////////////////////////////////////////////////
 /// @brief  Returns the Connect 4 Pop 10 secondary key.
-/// @param  _P10
+/// @param  _PT
 ////////////////////////////////////////////////////////
-static inline Board Interface_Connect4_pop10_2ndKey(const Connect4_Pop10 *const restrict _P10)
+static inline Board Interface_Connect4_pop10_2ndKey(const Connect4_Pop10 *const restrict _PT)
 {
-    return C4_variant == CONNECT4_POP10 ? Connect4_pop10_stateKey(_P10) : UINT64_MAX;
+    return -(C4_variant != CONNECT4_POP10) | Connect4_pop10_stateKey(_PT);
 }
 
 ///////////////////////////////////////////////////////
 /// @brief  Obtains the player's turn or side to move.
 /// @param  _C4_PLIES
-/// @param  _P_TURN
+/// @param  _PT_TURN
 ///////////////////////////////////////////////////////
-static inline bool Interface_Connect4_turn(const uint16_t _C4_PLIES, const bool _P_TURN)
+static inline bool Interface_Connect4_turn(const uint16_t _C4_PLIES, const bool _PT_TURN)
 {
-    return C4_variant == CONNECT4_POP10 ? _P_TURN : _C4_PLIES & 1;
+    return C4_variant == CONNECT4_POP10 ? _PT_TURN : _C4_PLIES & 1;
 }
 
 ////////////////////////////////////////////////////////////////////
 /// @brief  Helper routine to stamp the winner of a Connect 4 game.
 /// @param  _C4
-/// @param  _P10
+/// @param  _PT
 /// @return The value of `Connect4_*_winner()`.
 ////////////////////////////////////////////////////////////////////
-static inline int Interface_Connect4_winner(const Connect4 *const restrict _C4, const Connect4_Pop10 *const restrict _P10)
+static inline int Interface_Connect4_winner(const Connect4 *const restrict _C4, const Connect4_Pop10 *const restrict _PT)
 {
-    return C4_variant == CONNECT4_POP10 ? Connect4_pop10_winner(_P10) : Connect4_winner(_C4);
+    return C4_variant == CONNECT4_POP10 ? Connect4_pop10_winner(_PT) : Connect4_winner(_C4);
 }
 
 #ifdef FTW_SQLITE
@@ -253,8 +258,8 @@ static inline void Interface_Connect4_oracle_dfs(Connect4 *const restrict _c4, c
             uint8_t dDrop[MOVE_BOUNDS], dDropCnt = 0;
             uint8_t dPop[MOVE_BOUNDS], dPopCnt = 0, i;
 
-            Connect4_original_genMoveBody((_c4->mask + BOT_MASK) & ALL_MASK, dDrop, &dDropCnt);
-            Connect4_original_genMoveBody(_c4->side & BOT_MASK, dPop, &dPopCnt);
+            Connect4_original_genMoveBody(Connect4_dropMask(_c4->mask, BOT_MASK, ALL_MASK), dDrop, &dDropCnt);
+            Connect4_original_genMoveBody(Connect4_popMask(_c4->side), dPop, &dPopCnt);
 
             const bool C4_SYMM = Connect4_symmetric(_c4);
 
@@ -279,7 +284,7 @@ static inline void Interface_Connect4_oracle_dfs(Connect4 *const restrict _c4, c
         {
             uint8_t dArr[MOVE_BOUNDS], dCnt = 0;
 
-            Connect4_original_genMoveBody((_c4->mask + BOT_MASK) & ALL_MASK, dArr, &dCnt);
+            Connect4_original_genMoveBody(Connect4_dropMask(_c4->mask, BOT_MASK, ALL_MASK), dArr, &dCnt);
             Connect4_symmetric(_c4) ? (dCnt = (dCnt >> 1) + (dCnt & 1)) : FTW_VOID_NOP;
 
             for (uint8_t i = 0; i < dCnt; i++)
@@ -360,8 +365,8 @@ static inline void Interface_Connect4_oracle(Connect4 *const restrict _c4, const
                 uint8_t bDrop[MOVE_BOUNDS], bDropCnt = 0;
                 uint8_t bPop[MOVE_BOUNDS], bPopCnt = 0, i;
 
-                Connect4_original_genMoveBody((bC4->mask + BOT_MASK) & ALL_MASK, bDrop, &bDropCnt);
-                Connect4_original_genMoveBody(bC4->side & BOT_MASK, bPop, &bPopCnt);
+                Connect4_original_genMoveBody(Connect4_dropMask(bC4->mask, BOT_MASK, ALL_MASK), bDrop, &bDropCnt);
+                Connect4_original_genMoveBody(Connect4_popMask(bC4->side), bPop, &bPopCnt);
 
                 const bool C4_SYMM = Connect4_symmetric(bC4);
 
@@ -402,7 +407,7 @@ static inline void Interface_Connect4_oracle(Connect4 *const restrict _c4, const
             {
                 uint8_t bArr[MOVE_BOUNDS], bCnt = 0;
 
-                Connect4_original_genMoveBody((bC4->mask + BOT_MASK) & ALL_MASK, bArr, &bCnt);
+                Connect4_original_genMoveBody(Connect4_dropMask(bC4->mask, BOT_MASK, ALL_MASK), bArr, &bCnt);
                 Connect4_symmetric(bC4) ? (bCnt = (bCnt >> 1) + (bCnt & 1)) : FTW_VOID_NOP;
 
                 for (uint8_t i = 0; i < bCnt; i++)
@@ -461,11 +466,8 @@ void Interface_Connect4_perft(PerftStat *const restrict _stats, Connect4 *const 
     if (_D == 1)
     {
         _stats->nodes += moveCnt;
-
-        for (i = 0; i < moveCnt; i++)
-        {
-            moveArr[i] < COLS ? _stats->drops++ : _stats->pops++;
-        }
+        _stats->drops += stdc_count_ones_ull(Connect4_dropMask(_c4->mask, BOT_MASK, ALL_MASK));
+        C4_variant == CONNECT4_POPOUT ? _stats->pops += stdc_count_ones_ull(Connect4_popMask(_c4->side)) : FTW_VOID_NOP;
 
         return;
     }
@@ -533,29 +535,20 @@ void Interface_Make7_perft(PerftStat *const restrict _stats, const Make7 *const 
     {
         _stats->nodes += moveCnt;
 
-        for (i = 0; i < moveCnt; i++)
-        {
-            moveIdx = moveArr[i];
+        const uint64_t PERFT_M7_DROP_MASK = Connect4_dropMask(_M7->mask, MAKE7_BOT, MAKE7_ALL);
+        const uint8_t PERFT_M7_DROP_CNT = stdc_count_ones_ull(PERFT_M7_DROP_MASK);
+        const uint8_t PERFT_M7_OFFS[3] = Make7_offTileCounts(_M7);
 
-            switch (moveIdx >> 3)
-            {
-            case 0:
-                _stats->tile1s++;
-                break;
-            case 1:
-                _stats->tile2s++;
-                break;
-            case 2:
-                _stats->tile3s++;
-            default:
-                break;
-            }
-        }
+        PERFT_M7_OFFS[0] ? _stats->tile1s += PERFT_M7_DROP_CNT : FTW_VOID_NOP;
+        PERFT_M7_OFFS[1] ? _stats->tile2s += PERFT_M7_DROP_CNT : FTW_VOID_NOP;
+
+        const uint64_t PERFT_M7_THREES_MASK = PERFT_M7_DROP_MASK & MAKE7_THREES_MASK;
+        const uint8_t PERFT_M7_THREES_CNT = stdc_count_ones_ull(PERFT_M7_THREES_MASK);
+
+        PERFT_M7_OFFS[2] && PERFT_M7_THREES_MASK ? _stats->tile3s += PERFT_M7_THREES_CNT : FTW_VOID_NOP;
 
         return;
     }
-
-    Make7 perftM7 = *_M7;
 
     for (i = 0; i < moveCnt; i++)
     {
@@ -577,9 +570,10 @@ void Interface_Make7_perft(PerftStat *const restrict _stats, const Make7 *const 
             break;
         }
 
+        Make7 perftM7 = *_M7;
+
         Make7_drop(&perftM7, MOVE_TILE, moveIdx & 7);
         !Make7_over(&perftM7) ? Interface_Make7_perft(_stats, &perftM7, _D - 1) : _stats->nodes++;
-        perftM7 = *_M7;
     }
 }
 
@@ -643,10 +637,10 @@ static inline void Interface_run(void)
 
     if (UI_IS_MAKE7)
     {
-        M7_targetMethod = true;
-        UI_c4NotReady ? (puts(FTW_STR_MAKE7_RULESET), UI_c4NotReady = false) : FTW_VOID_NOP;
-        Make7_setTargetMethod();
-        printf("Using the %s win method\n", M7_targetMethod ? FTW_STR_WINDOWING : FTW_STR_EXACT);
+        M7_targetMode = true;
+        UI_c4NotReady ? puts(FTW_STR_MAKE7_RULESET), UI_c4NotReady = false : FTW_VOID_NOP;
+        Make7_setTargetMode();
+        printf(FTW_STR_WIN_MODE, M7_targetMode ? FTW_STR_WINDOW : FTW_STR_EXACT);
         Make7_init(&UI_m7);
         Make7_print(&UI_m7);
     }
@@ -668,8 +662,8 @@ static inline void Interface_run(void)
 
         HashRing_push(Connect4_canonicalize(Connect4_key(&UI_c4)));
         PathTable_init(&NS_path, UINT16_MAX);
-        PathStack_init(&NS_stack);
-        PathGraph_init(&NS_graph);
+        //PathStack_init(&NS_stack);
+        //PathGraph_init(&NS_graph);
     }
 
     NegaScout_History_init();
@@ -825,7 +819,7 @@ static inline void Interface_run(void)
                     dbQuery = SQLite_Connect4_pop10_query(database, c4Key, ptKey, &result);
                     break;
                 case CONNECT4_MAKE7:
-                    dbQuery = SQLite_Make7_query(database, m7Key, t1Key, t2Key, M7_targetMethod, &result);
+                    dbQuery = SQLite_Make7_query(database, m7Key, t1Key, t2Key, M7_targetMode, &result);
                     break;
                 }
 
@@ -875,7 +869,7 @@ static inline void Interface_run(void)
                         SQLite_Connect4_pop10_insert(database, c4Key, ptKey, &result);
                         break;
                     case CONNECT4_MAKE7:
-                        SQLite_Make7_insert(database, m7Key, t1Key, t2Key, M7_targetMethod, &result);
+                        SQLite_Make7_insert(database, m7Key, t1Key, t2Key, M7_targetMode, &result);
                         break;
                     }
 #else
@@ -1289,7 +1283,7 @@ static inline void Interface_run(void)
                     c4Key = Connect4_canonicalize(Connect4_key(&UI_c4));
                 }
 
-                if (UI_IS_MAKE7 ? SQLite_Make7_query(database, m7Key, t1Key, t2Key, M7_targetMethod, nullptr) : SQLite_Connect4_query(database, c4Key, nullptr))
+                if (UI_IS_MAKE7 ? SQLite_Make7_query(database, m7Key, t1Key, t2Key, M7_targetMode, nullptr) : SQLite_Connect4_query(database, c4Key, nullptr))
                 {
                     char overwrite = 'N';
 
@@ -1299,7 +1293,7 @@ static inline void Interface_run(void)
                     switch ((overwrite = toupper(getchar())))
                     {
                     case 'Y':
-                        UI_IS_MAKE7 ? SQLite_Make7_insert(database, m7Key, t1Key, t2Key, M7_targetMethod, &dbRes) : SQLite_Connect4_insert(database, c4Key, &dbRes);
+                        UI_IS_MAKE7 ? SQLite_Make7_insert(database, m7Key, t1Key, t2Key, M7_targetMode, &dbRes) : SQLite_Connect4_insert(database, c4Key, &dbRes);
                     default:
                         while (getchar() != '\n');
                     case '\n':
@@ -1308,7 +1302,7 @@ static inline void Interface_run(void)
                 }
                 else
                 {
-                    UI_IS_MAKE7 ? SQLite_Make7_insert(database, m7Key, t1Key, t2Key, M7_targetMethod, &dbRes) : SQLite_Connect4_insert(database, c4Key, &dbRes);
+                    UI_IS_MAKE7 ? SQLite_Make7_insert(database, m7Key, t1Key, t2Key, M7_targetMode, &dbRes) : SQLite_Connect4_insert(database, c4Key, &dbRes);
                 }
             }
             else
@@ -1348,9 +1342,10 @@ static inline void Interface_run(void)
 #ifndef FTW_SQLITE
             ResultRing_reset();
 #endif
-            M7_targetMethod = !M7_targetMethod;
-            Make7_setTargetMethod();
-            printf("Win method has been set to %s.\n", M7_targetMethod ? FTW_STR_WINDOWING : FTW_STR_EXACT);
+            M7_targetMode = !M7_targetMode;
+
+            Make7_setTargetMode();
+            printf(FTW_STR_WIN_MODE, M7_targetMode ? FTW_STR_WINDOW : FTW_STR_EXACT);
 
             showWinMsg = solved = false;
         }
@@ -1416,8 +1411,8 @@ static inline void Interface_run(void)
 
     TransTable_destroy(&NS_table);
     PathTable_destroy(&NS_path);
-    PathStack_destroy(&NS_stack);
-    PathGraph_destroy(&NS_graph);
+    //PathStack_destroy(&NS_stack);
+    //PathGraph_destroy(&NS_graph);
     NegaScout_History_destroy();
 
     if (!UI_IS_MAKE7)
