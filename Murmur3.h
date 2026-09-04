@@ -2,7 +2,7 @@
  *  Author: 2026- TheTrustedComputer
  *
  *  MurmurHash is a fast, non-cryptographic hash function created by Austin Appleby.
- *  The author has placed the code in the public domain, so any developer may use it freely.
+ *  The original author placed the code in the public domain, so any developer may use it freely.
  *
  *  This header rewrites `MurmurHash3_x64_128`, the 128-bit x86-64 version of MurmurHash3.
  *  Although considered outdated by modern standards, it stays relevant in certain fields.
