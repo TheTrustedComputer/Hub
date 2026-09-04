@@ -29,17 +29,17 @@
     #define constexpr const
 #endif
 
-constexpr uint8_t CARD_BITS = 6;
-constexpr uint8_t CARD_MASK = 63;
-constexpr uint8_t NUM_RANKS = 13;
-constexpr uint8_t NUM_SUITS = 4;
-constexpr uint8_t RANK_MASK = 15;
-constexpr uint8_t RANK_COUNT_BITS = 3;
-constexpr uint8_t RANK_COUNT_MASK = 7;
-constexpr uint8_t RANK_NONE = INT8_MAX;
-constexpr uint8_t SUIT_COUNT_BITS = RANK_COUNT_BITS;
-constexpr uint8_t SUIT_COUNT_MASK = RANK_COUNT_MASK;
-constexpr uint8_t SUIT_SHIFT = NUM_SUITS;
+static constexpr uint8_t CARD_BITS = 6;
+static constexpr uint8_t CARD_MASK = 63;
+static constexpr uint8_t NUM_RANKS = 13;
+static constexpr uint8_t NUM_SUITS = 4;
+static constexpr uint8_t RANK_MASK = 15;
+static constexpr uint8_t RANK_COUNT_BITS = 3;
+static constexpr uint8_t RANK_COUNT_MASK = 7;
+static constexpr uint8_t RANK_NONE = INT8_MAX;
+static constexpr uint8_t SUIT_COUNT_BITS = RANK_COUNT_BITS;
+static constexpr uint8_t SUIT_COUNT_MASK = RANK_COUNT_MASK;
+static constexpr uint8_t SUIT_SHIFT = NUM_SUITS;
 
 typedef enum : uint8_t
 {
@@ -47,7 +47,7 @@ typedef enum : uint8_t
 }
 Suit;
 
-typedef enum : int8_t
+typedef enum : int8_t // signed comparison
 {
     ACE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE, TEN, JACK, QUEEN, KING, JOKER
 }
@@ -57,75 +57,85 @@ typedef uint8_t Card;
 
 /////////////////////////////////////////////////
 /// @brief  Compares two ranks with Aces LOW.
+/// @param  _R0
+/// @param  _R1
 /// @note   To pass the function into `qsort()`.
 /////////////////////////////////////////////////
-int8_t Rank_AL_cmp(const Rank _RANK0, const Rank _RANK1)
+int8_t Rank_AL_cmp(const Rank _R0, const Rank _R1)
 {
-    return _RANK0 - _RANK1;
+    return _R0 - _R1;
 }
 
 /////////////////////////////////////////////////
 /// @brief  Compares two ranks with Aces HIGH.
+/// @param  _R0
+/// @param  _R1
 /// @note   Jokers are ranked higher than Kings.
 ///         To pass the function into `qsort()`.
 /////////////////////////////////////////////////
-int8_t Rank_AH_cmp(const Rank _RANK0, const Rank _RANK1)
+int8_t Rank_AH_cmp(const Rank _R0, const Rank _R1)
 {
-    const Rank R0 = _RANK0 ? _RANK0 - 1 : JOKER;
-    const Rank R1 = _RANK1 ? _RANK1 - 1 : JOKER;
+    const Rank R0 = _R0 ? _R1 - 1 : JOKER;
+    const Rank R1 = _R0 ? _R1 - 1 : JOKER;
 
     return R0 - R1;
 }
 
-//////////////////////////////////////////////
-/// @brief  Determines if a suit is red.
+///////////////////////////////////////////////
+/// @brief  Determines if a suit has red pips.
+/// @param  _S
 /// @return `true` if red; otherwise `false`.
-//////////////////////////////////////////////
-bool Suit_red(const Suit _SUIT)
+///////////////////////////////////////////////
+bool Suit_red(const Suit _S)
 {
-    return _SUIT == DIAMOND || _SUIT == HEART;
+    return _S == DIAMOND || _S == HEART;
 }
 
-////////////////////////////////////////////////
-/// @brief  Determines if a suit is black.
+/////////////////////////////////////////////////
+/// @brief  Determines if a suit has black pips.
+/// @param  _S
 /// @return `true` if black; otherwise `false`.
+/////////////////////////////////////////////////
+bool Suit_black(const Suit _S)
+{
+    return _S == CLUB || _S == SPADE;
+}
+
+///////////////////////////////////////////////////////////
+/// @brief  Makes a card from a rank `_R` and a suit `_S`.
+/// @param  _R
+/// @param  _S
+///////////////////////////////////////////////////////////
+Card Card_make(const Rank _R, const Suit _S)
+{
+    return _R | _S << SUIT_SHIFT;
+}
+
 ////////////////////////////////////////////////
-bool Suit_black(const Suit _SUIT)
+/// @brief  Extracts the rank from a card `_C`.
+/// @param  _C
+////////////////////////////////////////////////
+Rank Card_rank(const Card _C)
 {
-    return _SUIT == CLUB || _SUIT == SPADE;
-}
-
-/////////////////////////////////////////////////////////////////
-/// @brief  Makes a card from a rank `_RANK` and a suit `_SUIT`.
-/////////////////////////////////////////////////////////////////
-Card Card_make(const Rank _RANK, const Suit _SUIT)
-{
-    return _RANK | (_SUIT << SUIT_SHIFT);
-}
-
-///////////////////////////////////////////
-/// @brief  Extracts the rank from a card.
-///////////////////////////////////////////
-Rank Card_rank(const Card _CARD)
-{
-    return _CARD & RANK_MASK;
+    return _C & RANK_MASK;
 }
 
 ///////////////////////////////////////////
 /// @brief  Extracts the suit from a card.
+/// @param  _C
 ///////////////////////////////////////////
-Suit Card_suit(const Card _CARD)
+Suit Card_suit(const Card _C)
 {
-    return _CARD >> SUIT_SHIFT;
+    return _C >> SUIT_SHIFT;
 }
 
 ////////////////////////////////////////////////////////
 /// @brief  Prints a formatted card to standard output.
 ////////////////////////////////////////////////////////
-void Card_print(const Card _CARD)
+void Card_print(const Card _C)
 {
-    const Suit SUIT = Card_suit(_CARD);
-    const Rank RANK = Card_rank(_CARD);
+    const Suit SUIT = Card_suit(_C);
+    const Rank RANK = Card_rank(_C);
 
     printf("\e[7;1;"); // Invert and bold
 

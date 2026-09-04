@@ -10,12 +10,12 @@
 
 #include <stdint.h>
 
-static constexpr uint32_t GOLDEN_RATIO_32 = 0x9e3779b9u;
-static constexpr uint64_t GOLDEN_RATIO_64 = 0x9e3779b97f4a7c15ull;
+static constexpr uint32_t GOLDEN_RATIO_32 = 0x9e3779b9;
+static constexpr uint64_t GOLDEN_RATIO_64 = 0x9e3779b97f4a7c15;
 
 //////////////////////////////////////////////////////////////
 /// @brief      Auxiliary finalizer for the 32-bit generator.
-/// @param _z   The value pointed to by the buffer.
+/// @param  _z  The value pointed to by the buffer.
 /// @return     A 32-bit pseudorandom number.
 /// @details    `https://github.com/skeeto/hash-prospector`
 //////////////////////////////////////////////////////////////
@@ -29,7 +29,7 @@ uint32_t SplitMix32_finalize(uint32_t _z)
 
 //////////////////////////////////////////////////////////////
 /// @brief      Auxiliary finalizer for the 64-bit generator.
-/// @param _z   The value pointed to by the buffer.
+/// @param  _z  The value pointed to by the buffer.
 /// @return     A 64-bit pseudorandom number.
 //////////////////////////////////////////////////////////////
 uint64_t SplitMix64_finalize(uint64_t _z)
@@ -42,7 +42,7 @@ uint64_t SplitMix64_finalize(uint64_t _z)
 
 /////////////////////////////////////////////////////////////////////
 /// @brief      Rolls the next number from the SplitMix32 generator.
-/// @param _z   Unaliased pointer to a 32-bit buffer.
+/// @param  _z  Unaliased pointer to a 32-bit buffer.
 /////////////////////////////////////////////////////////////////////
 uint32_t SplitMix32(uint32_t *const restrict _z)
 {
@@ -51,7 +51,7 @@ uint32_t SplitMix32(uint32_t *const restrict _z)
 
 /////////////////////////////////////////////////////////////////////
 /// @brief      Rolls the next number from the SplitMix64 generator.
-/// @param _z   Unaliased pointer to a 64-bit buffer.
+/// @param  _z  Unaliased pointer to a 64-bit buffer.
 /////////////////////////////////////////////////////////////////////
 uint64_t SplitMix64(uint64_t *const restrict _z)
 {

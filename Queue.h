@@ -1,6 +1,6 @@
 /*
  *  Author: 2025- TheTrustedComputer
- *  
+ *
  *  A queue is a FIFO data structure for storing elements; it can accept arbitrary data types.
  *  It is implemented as a singly linked list to achieve constant-time enqueuing and dequeuing.
  *  A naive method would only store the head, but doing the same for the tail is standard practice.
@@ -43,7 +43,7 @@ QueueList;
 
 ////////////////////////////////////////////////////
 /// @brief      Tests if the queue has no elements.
-/// @param _Q   Unaliased pointer to the queue.
+/// @param  _Q  Unaliased pointer to the queue.
 /// @return     `true` if it is; otherwise `false`.
 ////////////////////////////////////////////////////
 bool QueueList_empty(const QueueList *const restrict _Q)
@@ -53,7 +53,7 @@ bool QueueList_empty(const QueueList *const restrict _Q)
 
 ////////////////////////////////////////////////////////
 /// @brief      Initializes a queue with null pointers.
-/// @param _q   Unaliased pointer to the queue.
+/// @param  _q  Unaliased pointer to the queue.
 ////////////////////////////////////////////////////////
 void QueueList_init(QueueList *const restrict _q)
 {
@@ -62,7 +62,7 @@ void QueueList_init(QueueList *const restrict _q)
 
 ///////////////////////////////////////////////////
 /// @brief      Releases memory used by the queue.
-/// @param _q   Unaliased pointer to the queue.
+/// @param  _q  Unaliased pointer to the queue.
 ///////////////////////////////////////////////////
 void QueueList_destroy(QueueList *const restrict _q)
 {
@@ -71,14 +71,14 @@ void QueueList_destroy(QueueList *const restrict _q)
         delQn = (*delQ)->next;
         REC_free(*delQ);
     }
-    
+
     _q->tail = nullptr;
 }
 
 ////////////////////////////////////////////////////////////
 /// @brief          Enqueues data to the tail of the queue.
-/// @param _q       Unaliased pointer to the queue.
-/// @param _data    Pointer to the raw data to append.
+/// @param  _q      Unaliased pointer to the queue.
+/// @param  _data   Pointer to the raw data to append.
 ////////////////////////////////////////////////////////////
 void QueueList_push(QueueList *const restrict _q, void *const restrict _data)
 {
@@ -99,7 +99,7 @@ void QueueList_push(QueueList *const restrict _q, void *const restrict _data)
 
 //////////////////////////////////////////////////////////
 /// @brief      Dequeues data from the head of the queue.
-/// @param _q   Unaliased pointer to the queue.
+/// @param  _q  Unaliased pointer to the queue.
 //////////////////////////////////////////////////////////
 void QueueList_pop(QueueList *const restrict _q)
 {

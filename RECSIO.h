@@ -66,9 +66,9 @@ static inline void REC_skipBlank(char *restrict *const restrict _str)
 
 //////////////////////////////////////////////////////////////////
 /// @brief          `malloc()` with an error message.
-/// @param _SIZE    Amount of bytes to allocate.
-/// @param _MSG     Error message to print.
-/// @param _FATAL   If `true`, abort on failure.
+/// @param  _SIZE   Amount of bytes to allocate.
+/// @param  _MSG    Error message to print.
+/// @param  _FATAL  If `true`, abort on failure.
 /// @return         Value of `malloc()`, or NULL on zero `_SIZE`.
 //////////////////////////////////////////////////////////////////
 void *REC_malloc(const size_t _SIZE, const char *const restrict _MSG, const bool _FATAL)
@@ -98,10 +98,10 @@ void *REC_malloc(const size_t _SIZE, const char *const restrict _MSG, const bool
 
 //////////////////////////////////////////////////////////////////
 /// @brief          `calloc()` with an error message.
-/// @param _BLKS    Number of blocks to allocate.
-/// @param _SIZE    Size of each block.
-/// @param _MSG     Error message to print.
-/// @param _FATAL   If `true`, abort on failure.
+/// @param  _BLKS   Number of blocks to allocate.
+/// @param  _SIZE   Size of each block.
+/// @param  _MSG    Error message to print.
+/// @param  _FATAL  If `true`, abort on failure.
 /// @return         Value of `calloc()`, or NULL on zero `_SIZE`.
 //////////////////////////////////////////////////////////////////
 void *REC_calloc(const size_t _BLKS, const size_t _SIZE, const char *const restrict _MSG, const bool _FATAL)
@@ -131,8 +131,8 @@ void *REC_calloc(const size_t _BLKS, const size_t _SIZE, const char *const restr
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief          Automatically updates a pointer after `realloc()` moves it.
-/// @param _mem     Unaliased pointer to the memory to reallocate.
-/// @param _SIZE    Requested size in bytes.
+/// @param  _mem    Unaliased pointer to the memory to reallocate.
+/// @param  _SIZE   Requested size in bytes.
 /// @return         Return value of `realloc()`.
 /// @note           The old pointer is still valid after reallocation fails.
 ////////////////////////////////////////////////////////////////////////////////
@@ -162,7 +162,7 @@ void *REC_realloc_mem(void *restrict *const restrict _mem, const size_t _SIZE)
 
 ///////////////////////////////////////////////////////////////
 /// @brief          Calls `free()` and assigns `_mem` to NULL.
-/// @param _mem     Unaliased pointer to the allocated memory.
+/// @param  _mem    Unaliased pointer to the allocated memory.
 ///////////////////////////////////////////////////////////////
 void REC_free_mem(void *restrict *const restrict _mem)
 {
@@ -240,8 +240,8 @@ long REC_gets(char *restrict *const restrict _str)
 
 /////////////////////////////////////////////////////
 /// @brief          `fopen()` with an error message.
-/// @param _NAME    Name of the file.
-/// @param _MODE    Read/write mode.
+/// @param  _NAME   Name of the file.
+/// @param  _MODE   Read/write mode.
 /// @return         Return value of `fopen()`.
 /////////////////////////////////////////////////////
 FILE *REC_fopen(const char *const restrict _NAME, const char *const restrict _MODE)
@@ -371,8 +371,8 @@ long REC_strchr(char *const restrict _STR, const char _CHR)
 
 /////////////////////////////////////////////////////////////
 /// @brief          Case-insensitive full string comparison.
-/// @param _STR_A   First string.
-/// @param _STR_B   Second string.
+/// @param  _STR_A  First string.
+/// @param  _STR_B  Second string.
 /// @return         `true` if they match; otherwise `false`.
 /// @note           Similar to POSIX's `strcasecmp()`.
 /////////////////////////////////////////////////////////////
@@ -400,11 +400,11 @@ bool REC_strcasecmp(const char *const restrict _STR_A, const char *const restric
 
 ////////////////////////////////////////////////////////////////////
 /// @brief          Error-handling wrapper for `thrd_create()`.
-/// @param _thr     Unaliased pointer to the new thread.
-/// @param _func    Pointer to the thread function's start address.
-/// @param _arg     Unaliased pointer to the function argument.
-/// @param _MSG     Error message to print.
-/// @param _FATAL   If `true`, abort on failure.
+/// @param  _thr    Unaliased pointer to the new thread.
+/// @param  _func   Pointer to the thread function's start address.
+/// @param  _arg    Unaliased pointer to the function argument.
+/// @param  _MSG    Error message to print.
+/// @param  _FATAL  If `true`, abort on failure.
 /// @return         Value of `thrd_create()`.
 ////////////////////////////////////////////////////////////////////
 int REC_thrd_create(thrd_t *restrict _thr, thrd_start_t _func, void *const restrict _arg, const char *const restrict _MSG, const bool _FATAL)
@@ -434,10 +434,10 @@ int REC_thrd_create(thrd_t *restrict _thr, thrd_start_t _func, void *const restr
 
 //////////////////////////////////////////////////////////////////////
 /// @brief          Error-handling wrapper for `thrd_join()`.
-/// @param _thr     Unaliased pointer to the thread to join.
-/// @param _res     Output parameter to store the thread's exit code.
-/// @param _MSG     Error message to print.
-/// @param _FATAL   If `true`, abort on failure.
+/// @param  _thr    Unaliased pointer to the thread to join.
+/// @param  _res    Output parameter to store the thread's exit code.
+/// @param  _MSG    Error message to print.
+/// @param  _FATAL  If `true`, abort on failure.
 /// @return         Value of `thrd_join()`.
 //////////////////////////////////////////////////////////////////////
 int REC_thrd_join(thrd_t _thr, int *_res, const char *const restrict _MSG, const bool _FATAL)
@@ -462,10 +462,10 @@ int REC_thrd_join(thrd_t _thr, int *_res, const char *const restrict _MSG, const
 
 /////////////////////////////////////////////////////////////
 /// @brief          Error-handling wrapper for `mtx_init()`.
-/// @param _mtx     Unaliased pointer to the mutex.
-/// @param _TYPE    Mutex type.
-/// @param _MSG     Error message to print.
-/// @param _FATAL   If `true`, abort on failure.
+/// @param  _mtx    Unaliased pointer to the mutex.
+/// @param  _TYPE   Mutex type.
+/// @param  _MSG    Error message to print.
+/// @param  _FATAL  If `true`, abort on failure.
 /// @return         Value of `mtx_init()`.
 /////////////////////////////////////////////////////////////
 int REC_mtx_init(mtx_t *restrict _mtx, const int _TYPE, const char *const restrict _MSG, const bool _FATAL)
@@ -495,9 +495,9 @@ int REC_mtx_init(mtx_t *restrict _mtx, const int _TYPE, const char *const restri
 
 /////////////////////////////////////////////////////////////////
 /// @brief          Error-handling wrapper for `cnd_init()`.
-/// @param _cnd     Unaliased pointer to the condition variable.
-/// @param _MSG     Error message to print.
-/// @param _FATAL   If `true`, abort on failure.
+/// @param  _cnd    Unaliased pointer to the condition variable.
+/// @param  _MSG    Error message to print.
+/// @param  _FATAL  If `true`, abort on failure.
 /// @return         Value of `cnd_init()`.
 /////////////////////////////////////////////////////////////////
 int REC_cnd_init(cnd_t *restrict _cnd, const char *const restrict _MSG, const bool _FATAL)
