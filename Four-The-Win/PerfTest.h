@@ -8,6 +8,8 @@
 #ifndef PERFTTEST_H
 #define PERFTTEST_H
 
+#pragma pack(push, 1)
+
 typedef struct
 {
     uint64_t nodes;
@@ -27,6 +29,8 @@ typedef struct
     };
 }
 PerftStat;
+
+#pragma pack(pop)
 
 //////////////////////////////////////////////////////////////////////////
 /// @brief  Writes the results of a perft to standard output (Connect 4).

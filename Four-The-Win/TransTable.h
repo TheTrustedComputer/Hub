@@ -38,9 +38,8 @@ typedef struct
 {
     TTLock lock;
     int16_t value;
-    uint16_t depth;
+    uint16_t depth : 14, bound : 2;
     uint8_t move; // bitwise NOT of move
-    TransBound bound;
 }
 TransEntry;
 
@@ -294,8 +293,8 @@ TransTable_new:
 TransTable_update:
     te->value = _VAL;
     te->depth = _DEP;
-    te->move = ~_MOVE;
     te->bound = BOUND;
+    te->move = ~_MOVE;
 }
 
 /////////////////////////////////////////////////////////////

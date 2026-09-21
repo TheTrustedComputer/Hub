@@ -9,6 +9,8 @@
 #ifndef PATHTABLE_H
 #define PATHTABLE_H
 
+#pragma pack(push, 1)
+
 typedef struct
 {
     Board key;
@@ -20,7 +22,7 @@ PathEntry;
 typedef struct
 {
     PathEntry *restrict entry;
-    uint16_t size;
+    uint32_t size; // real size
 }
 PathTable;
 
@@ -56,6 +58,8 @@ typedef struct
     uint16_t top, next;
 }
 PathTarjan;
+
+#pragma pack(pop)
 
 #ifdef FTW_LIBDIVIDE
 #ifdef FTW_BRANCHLESS

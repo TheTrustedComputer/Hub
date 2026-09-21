@@ -486,17 +486,21 @@ static inline void Connect4_print(const Connect4 *const restrict _c4, const bool
             if (_c4->side & CELL)
             {
                 g_emoji ? (_TURN ? printf(FTW_C4_EMOJI_RED_CIRCLE) : printf(FTW_C4_EMOJI_YELLOW_CIRCLE))
-                        : (_TURN ? printf(FTW_C4_ASCII_RED_CIRCLE) : printf(FTW_C4_ASCII_YELLOW_CIRCLE));
+                        : (_TURN ? printf(FTW_C4_ANSI_RED_CIRCLE) : printf(FTW_C4_ANSI_YELLOW_CIRCLE));
             }
             else if (_c4->mask & CELL)
             {
                 g_emoji ? (_TURN ? printf(FTW_C4_EMOJI_YELLOW_CIRCLE) : printf(FTW_C4_EMOJI_RED_CIRCLE))
-                        : (_TURN ? printf(FTW_C4_ASCII_YELLOW_CIRCLE) : printf(FTW_C4_ASCII_RED_CIRCLE));
+                        : (_TURN ? printf(FTW_C4_ANSI_YELLOW_CIRCLE) : printf(FTW_C4_ANSI_RED_CIRCLE));
             }
             else
             {
-                g_emoji ? printf(FTW_C4_EMOJI_BLUE_CIRCLE) : printf(FTW_C4_ASCII_BLUE_CIRCLE);
+                g_emoji ? printf(FTW_C4_EMOJI_BLUE_CIRCLE) : printf(FTW_C4_ANSI_BLUE_CIRCLE);
             }
+
+            //!g_emoji ? (j % COLS == COLS_M1 ? printf("\e[0m") : printf(" ")) : FTW_VOID_NOP;
+            !g_emoji ? printf("\e[0m") : FTW_VOID_NOP;
+
         }
 
         if (i)
@@ -1191,6 +1195,18 @@ static inline bool Connect4_pop10_draw(const Connect4 *const restrict _C4, const
     const uint8_t OP_PIECE_COUNT = _P10->turn ? _P10->pops & 0xf : _P10->pops >> 4;
 
     return PL_PIECE_COUNT + PL_BOARD_COUNT <= POP10_TGT_M1 && OP_PIECE_COUNT + OP_BOARD_COUNT <= POP10_TGT_M1;
+}
+
+////////////////////////////////////////////////////////
+/// @brief  Computes the Pop 10 extra-turn upper bound.
+////////////////////////////////////////////////////////
+static inline uint8_t Connect4_pop10_turnUpperBound(void)
+{
+#if FTW_C4_MAX_BITS > 64
+    return Connect4_popcnt(COL_MASK | BOT_MASK) - 1;
+#else
+    return stdc_count_ones_ull(COL_MASK | BOT_MASK) - 1;
+#endif
 }
 
 /////////////////////////////////////////////////////////////

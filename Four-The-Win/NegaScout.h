@@ -18,11 +18,11 @@
 #ifndef NEGASCOUT_H
 #define NEGASCOUT_H
 
+static constexpr uint16_t NS_MAX_DEPTH = 10000;
 static constexpr int16_t NS_WIN_VAL = 30000;
-static constexpr int16_t NS_WIN_THR = NS_WIN_VAL - 10000;
+static constexpr int16_t NS_WIN_THR = NS_WIN_VAL - NS_MAX_DEPTH;
 static constexpr int16_t NS_PROG = 1;
 static constexpr int16_t NS_DRAW = 0;
-static constexpr uint16_t NS_MAX_DEPTH = INT16_MAX;
 
 static TransTable NS_table;
 //static PathStack NS_stack;
@@ -642,10 +642,11 @@ static inline Result NegaScout_Connect4_popout_iterative(Connect4 *const restric
 
     const uint16_t POP_DEPTH = BOARD_AREA < 128 ? UINT8_MAX : NS_MAX_DEPTH;
     const uint16_t DEPTH = _c4->plies > POP_DEPTH ? _c4->plies : POP_DEPTH;
-    constexpr int16_t POP_BOUND = NS_PROG + 1;
+    constexpr int16_t POP_WINDOW = NS_PROG + 1;
 
     // uint64_t nodePrev = 0, nodeDelta = 0; int16_t val = NS_DRAW;
     int16_t val = NS_DRAW, vals[2] = { -NS_PROG, NS_PROG };
+    uint8_t drawFixedPoints = UINT8_MAX;
 
     TransTable_reset(&NS_table);
     NegaScout_History_randomize();
@@ -655,7 +656,7 @@ static inline Result NegaScout_Connect4_popout_iterative(Connect4 *const restric
     {
         _PRINT ? printf(FTW_STR_SOLVING_INFINITE, i), fflush(stdout) : FTW_VOID_NOP;
 
-        if (abs((val = NegaScout_Connect4_search(_c4, i, -POP_BOUND, POP_BOUND))) >= NS_WIN_THR)
+        if (abs((val = NegaScout_Connect4_search(_c4, i, -NS_PROG, POP_WINDOW))) >= NS_WIN_THR)
         {
             goto NegaScout_Connect4_popout_iterative_solved;
         }
@@ -671,9 +672,16 @@ static inline Result NegaScout_Connect4_popout_iterative(Connect4 *const restric
 
         vals[i & 1] = val;
 
-        if (val == NS_DRAW && vals[0] == vals[1]) // || DELTA == nodeDelta))
+        if (vals[0] == vals[1]) // || DELTA == nodeDelta))
         {
-            goto NegaScout_Connect4_popout_iterative_solved;
+            if (++drawFixedPoints == 2)
+            {
+                goto NegaScout_Connect4_popout_iterative_solved;
+            }
+        }
+        else
+        {
+            drawFixedPoints = 0;
         }
 
         //nodePrev = NS_nodes;
@@ -701,10 +709,10 @@ static inline Result NegaScout_Connect4_pop10_iterative(Connect4 *const restrict
     NS_nodes = 0;
 
     const uint16_t DEPTH = _c4->plies > NS_MAX_DEPTH ? _c4->plies : NS_MAX_DEPTH;
-    constexpr int16_t POP_BOUND = NS_PROG + 1;
+    const uint8_t TURN_BOUND = Connect4_pop10_turnUpperBound();
 
     //uint64_t nodePrev = 0, nodeDelta = 0; int16_t val = NS_DRAW;
-    int16_t val = NS_DRAW, vals[2] = { -NS_PROG, NS_PROG };
+    int16_t val = NS_DRAW; uint8_t drawFixedPoints = UINT8_MAX;
 
     TransTable_reset(&NS_table);
     NegaScout_History_randomize();
@@ -719,7 +727,7 @@ static inline Result NegaScout_Connect4_pop10_iterative(Connect4 *const restrict
     {
         _PRINT ? printf(FTW_STR_SOLVING_INFINITE, i), fflush(stdout) : FTW_VOID_NOP;
 
-        if (abs((val = NegaScout_Connect4_pop10_search(_c4, _p10, i, -POP_BOUND, POP_BOUND))) >= NS_WIN_THR)
+        if (abs((val = NegaScout_Connect4_pop10_search(_c4, _p10, i, -NS_WIN_THR, NS_WIN_THR))) >= NS_WIN_THR)
         {
             goto NegaScout_Connect4_pop10_iterative_solved;
         }
@@ -734,16 +742,24 @@ static inline Result NegaScout_Connect4_pop10_iterative(Connect4 *const restrict
 
         /*const uint64_t DELTA = NS_nodes - nodePrev;
 
-        if (!val && DELTA == nodeDelta)
+        if (val == NS_DRAW && DELTA == nodeDelta)
         {
             goto NegaScout_Connect4_pop10_iterative_solved;
         }*/
 
-        vals[i & 1] = val;
-
-        if (val == NS_DRAW && vals[0] == vals[1])
+        if (val == NS_DRAW)
         {
-            goto NegaScout_Connect4_pop10_iterative_solved;
+#ifdef FTW_DEBUG
+            printf("Draw Fixed Point Count: 0x%X\n", drawFixedPoints);
+#endif
+            if (++drawFixedPoints == TURN_BOUND)
+            {
+                goto NegaScout_Connect4_pop10_iterative_solved;
+            }
+        }
+        else
+        {
+            drawFixedPoints = 0;
         }
 
         /*nodePrev = NS_nodes;

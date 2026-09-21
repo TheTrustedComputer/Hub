@@ -17,12 +17,16 @@
 
 static constexpr uint16_t RES_RING_SIZE = 256;
 
+#pragma pack(push, 1)
+
 typedef struct
 {
     Board keyA, keyB, keyC;
     Result res;
 }
 ResultRing;
+
+#pragma pack(pop)
 
 static ResultRing ResultRing_buf[RES_RING_SIZE];
 static uint8_t ResultRing_idx;

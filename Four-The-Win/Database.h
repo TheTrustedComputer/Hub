@@ -51,16 +51,16 @@ static inline bool SQLite_open(sqlite3 **_db, const char *const restrict _NAME)
 {
     SQLite_check(sqlite3_open(_NAME, _db), *_db, "\e[1m%s: Could not open the solution database -- %s.\e[0m\n");
 
-    static constexpr char C4_TABLE_QUERY[] = "CREATE TABLE IF NOT EXISTS ORACLE (KEY BLOB PRIMARY KEY, RESULT BLOB) WITHOUT ROWID;";
-    static constexpr char PT_TABLE_QUERY[] = "CREATE TABLE IF NOT EXISTS ORACLE (KEY0 BLOB, KEY1 INTEGER, RESULT BLOB, PRIMARY KEY(KEY0, KEY1)) WITHOUT ROWID;";
-    static constexpr char M7_TABLE_QUERY[] = "CREATE TABLE IF NOT EXISTS ORACLE (KEY0 BLOB, KEY1 BLOB, KEY2 BLOB, MODE INTEGER, RESULT BLOB, PRIMARY KEY(KEY0, KEY1, KEY2, MODE)) WITHOUT ROWID;";
+    static constexpr char C4_TABLE_QUERY[] = "CREATE TABLE IF NOT EXISTS ORACLE (POS_KEY BLOB PRIMARY KEY, SOLUTION BLOB) WITHOUT ROWID;";
+    static constexpr char PT_TABLE_QUERY[] = "CREATE TABLE IF NOT EXISTS ORACLE (POS_KEY BLOB, META_KEY INTEGER, SOLUTION BLOB, PRIMARY KEY(POS_KEY, META_KEY)) WITHOUT ROWID;";
+    static constexpr char M7_TABLE_QUERY[] = "CREATE TABLE IF NOT EXISTS ORACLE (POS_KEY BLOB, TILE1_KEY BLOB, TILE2_KEY BLOB, WIN_MODE INTEGER, SOLUTION BLOB, PRIMARY KEY(POS_KEY, TILE1_KEY, TILE2_KEY, WIN_MODE)) WITHOUT ROWID;";
 
     const bool DB_MAKE7 = C4_variant == CONNECT4_MAKE7;
 
     SQLite_check(sqlite3_exec(*_db, DB_MAKE7 ? M7_TABLE_QUERY : (C4_variant == CONNECT4_POP10 ? PT_TABLE_QUERY : C4_TABLE_QUERY), nullptr, nullptr, nullptr), *_db, "\e[1m%s: Could not create the solution database -- %s.\e[0m\n");
 
     // 56 + 2*49 = 154
-    keyBlob = REC_calloc(DB_MAKE7 ? sizeof(uint8_t) * 154 : sizeof(Board), 1, "Could not allocate memory for the key blob.", true);
+    keyBlob = REC_calloc(DB_MAKE7 ? sizeof(uint8_t) * 154 : sizeof(Board), 1, "Could not allocate memory for the position key blob.", true);
     resBlob = REC_calloc(!DB_MAKE7 + 1, 1, "Could not allocate memory for the result blob.", true);
 
     return SQLite_pragmas(*_db);
@@ -87,7 +87,7 @@ static inline bool SQLite_close(sqlite3 *const restrict _db)
 ///////////////////////////////////////////////////////////
 static inline bool SQLite_delete(sqlite3 *const restrict _db)
 {
-    SQLite_check(sqlite3_exec(_db, "DELETE FROM ORACLE;", nullptr, nullptr, nullptr), _db, "\e[1m%s: Could not delete the solution database table -- %s.\e[0m\n");
+    SQLite_check(sqlite3_exec(_db, "DELETE FROM ORACLE;", nullptr, nullptr, nullptr), _db, "\e[1m%s: Could not delete the solution database -- %s.\e[0m\n");
 
     return true;
 }
@@ -125,7 +125,7 @@ static inline bool SQLite_Connect4_query(sqlite3 *const restrict _db, Board _key
 {
     sqlite3_stmt *stmt;
 
-    SQLite_check(sqlite3_prepare_v2(_db, "SELECT RESULT FROM ORACLE WHERE KEY = ?;", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare a selection statement for Connect 4 -- %s.\e[0m\n");
+    SQLite_check(sqlite3_prepare_v2(_db, "SELECT SOLUTION FROM ORACLE WHERE POS_KEY = ?;", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare a selection statement for Connect 4 -- %s.\e[0m\n");
 
     uint8_t keyBytes = 0;
 
@@ -161,7 +161,7 @@ static inline bool SQLite_Connect4_pop10_query(sqlite3 *const restrict _db, Boar
 {
     sqlite3_stmt *stmt;
 
-    SQLite_check(sqlite3_prepare_v2(_db, "SELECT RESULT FROM ORACLE WHERE KEY0 = ? AND KEY1 = ?;", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare a selection statement for Connect 4 Pop 10 -- %s.\e[0m\n");
+    SQLite_check(sqlite3_prepare_v2(_db, "SELECT SOLUTION FROM ORACLE WHERE POS_KEY = ? AND META_KEY = ?;", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare a selection statement for Pop 10 -- %s.\e[0m\n");
 
     uint8_t keyBytes = 0;
 
@@ -199,7 +199,7 @@ static inline bool SQLite_Make7_query(sqlite3 *const restrict _db, uint64_t _k0,
 {
     sqlite3_stmt *stmt;
 
-    SQLite_check(sqlite3_prepare_v2(_db, "SELECT RESULT FROM ORACLE WHERE KEY0 = ? AND KEY1 = ? AND KEY2 = ? AND MODE = ?;", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare a selection statement for Make 7 -- %s.\e[0m\n");
+    SQLite_check(sqlite3_prepare_v2(_db, "SELECT SOLUTION FROM ORACLE WHERE POS_KEY = ? AND TILE1_KEY = ? AND TILE2_KEY = ? AND WIN_MODE = ?;", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare a selection statement for Make 7 -- %s.\e[0m\n");
 
     Make7_canonicalize(_k0, _k1, _k2, &_k0, &_k1, &_k2);
 
@@ -255,7 +255,7 @@ static inline bool SQLite_Connect4_insert(sqlite3 *const restrict _db, Board _ke
 {
     sqlite3_stmt *stmt;
 
-    SQLite_check(sqlite3_prepare_v2(_db, "REPLACE INTO ORACLE (KEY, RESULT) VALUES (?, ?);", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare an insertion statement for Connect 4 -- %s.\e[0m\n");
+    SQLite_check(sqlite3_prepare_v2(_db, "REPLACE INTO ORACLE (POS_KEY, SOLUTION) VALUES (?, ?);", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare an insertion statement for Connect 4 -- %s.\e[0m\n");
 
     uint8_t keyBytes = 0, resBytes = 0;
 
@@ -296,7 +296,7 @@ static inline bool SQLite_Connect4_pop10_insert(sqlite3 *const restrict _db, Boa
 {
     sqlite3_stmt *stmt;
 
-    SQLite_check(sqlite3_prepare_v2(_db, "REPLACE INTO ORACLE (KEY0, KEY1, RESULT) VALUES (?, ?, ?);", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare an insertion statement for Connect 4 Pop 10 -- %s.\e[0m\n");
+    SQLite_check(sqlite3_prepare_v2(_db, "REPLACE INTO ORACLE (POS_KEY, META_KEY, SOLUTION) VALUES (?, ?, ?);", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare an insertion statement for Pop 10 -- %s.\e[0m\n");
 
     uint8_t keyBytes = 0, resBytes = 0;
 
@@ -316,7 +316,7 @@ static inline bool SQLite_Connect4_pop10_insert(sqlite3 *const restrict _db, Boa
 
     if (sqlite3_step(stmt) != SQLITE_DONE)
     {
-        fprintf(stderr, "\e[1m%s: Could not insert into the Connect 4 Pop 10 solution database -- %s.\e[0m\n", FTW_STR_ERROR_PREFIX, sqlite3_errmsg(_db));
+        fprintf(stderr, "\e[1m%s: Could not insert into the Pop 10 solution database -- %s.\e[0m\n", FTW_STR_ERROR_PREFIX, sqlite3_errmsg(_db));
         sqlite3_finalize(stmt);
 
         return false;
@@ -340,7 +340,7 @@ static inline bool SQLite_Make7_insert(sqlite3 *const restrict _db, uint64_t _k0
 {
     sqlite3_stmt *stmt;
 
-    SQLite_check(sqlite3_prepare_v2(_db, "REPLACE INTO ORACLE (KEY0, KEY1, KEY2, MODE, RESULT) VALUES (?, ?, ?, ?, ?);", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare an insertion statement for Make 7 -- %s.\e[0m\n");
+    SQLite_check(sqlite3_prepare_v2(_db, "REPLACE INTO ORACLE (POS_KEY, TILE1_KEY, TILE2_KEY, WIN_MODE, SOLUTION) VALUES (?, ?, ?, ?, ?);", -1, &stmt, nullptr), _db, "\e[1m%s: Could not prepare an insertion statement for Make 7 -- %s.\e[0m\n");
 
     Make7_canonicalize(_k0, _k1, _k2, &_k0, &_k1, &_k2);
 

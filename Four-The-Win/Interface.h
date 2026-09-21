@@ -24,6 +24,7 @@ static uint8_t UI_m7UndoIdx;
 static uint8_t UI_m7MoveHist[MAKE7_AREA];
 
 static uint32_t UI_ttSize = TT_BASE_SIZE;
+static constexpr uint32_t UI_PATH_SIZE = UINT32_MAX;
 
 //////////////////////////////////////////////
 /// @brief  A help menu for invalid commands.
@@ -65,7 +66,7 @@ static inline void Interface_help(void)
     printf(" tgwin      Toggle the Make 7 win mode (%s/%s).\n", FTW_STR_EXACT, FTW_STR_WINDOW);
     puts(" tiles      Obtain the remaining tiles per player (Make 7).");
     printf(" undo       Undo the last move. %s: u.\n", FTW_STR_SHORT_ALIAS);
-    printf(" view       View solutions for each move. %s: v.\n", FTW_STR_SHORT_ALIAS);
+    printf(" view       View results for each move. %s: v.\n", FTW_STR_SHORT_ALIAS);
 }
 
 //////////////////////////////////////////////////////////
@@ -661,7 +662,7 @@ static inline void Interface_run(void)
         UI_IS_POP10 ? Connect4_pop10_print(&UI_p10) : FTW_VOID_NOP;
 
         HashRing_push(Connect4_canonicalize(Connect4_key(&UI_c4)));
-        PathTable_init(&NS_path, UINT16_MAX);
+        PathTable_init(&NS_path, UI_PATH_SIZE);
         //PathStack_init(&NS_stack);
         //PathGraph_init(&NS_graph);
     }
@@ -885,7 +886,11 @@ static inline void Interface_run(void)
         {
             if (winner == -1)
             {
+                TransTable_destroy(&NS_table);
+                PathTable_destroy(&NS_path);
                 MonteCarloTreeSearch(&UI_c4, &UI_p10, &UI_m7);
+                TransTable_init(&NS_table, UI_ttSize * UI_ttMulti);
+                PathTable_init(&NS_path, UI_PATH_SIZE);
             }
         }
         else if (UI_IS_CYLINDER && Interface_findLongCmd(cmd, "<"))

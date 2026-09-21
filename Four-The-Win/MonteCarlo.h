@@ -25,6 +25,10 @@
 #ifndef MONTECARLO_H
 #define MONTECARLO_H
 
+#ifndef FTW_NODEPOOL
+#pragma pack(push, 1)
+#endif
+
 typedef enum : uint8_t
 {
     MCTS_NONE,
@@ -67,7 +71,27 @@ typedef struct MCTSResult
 }
 MCTSResult;
 
+typedef struct // MAST improves upon purely random rollouts, akin to the history heuristic in alpha-beta.
+{
+    double visits, score;
+}
+MASTEntry;
+
+typedef struct
+{
+    uint8_t move;
+    bool turn;
+}
+MASTRecord;
+
+#ifndef FTW_NODEPOOL
+#pragma pack(pop)
+#endif
+
 // static constexpr double MCTS_C = 1.4142135623730950488;
+static constexpr uint8_t MCTS_MAX_DEPTH = UINT8_MAX;
+static constexpr uint8_t MAST_1_EPSILON = 4;
+static constexpr uint8_t MAST_EPSILON = 1;
 
 #ifdef FTW_NODEPOOL
     static MemoryPool MCTS_nodePool;
@@ -79,10 +103,83 @@ static MCTSTable MCTS_table; // separate chaining
 static MCTSNode *restrict *restrict MCTS_termNodes;
 static uint8_t *restrict MCTS_movArr, MCTS_termCnt;
 static atomic_bool MCTS_run;
+static MASTEntry *restrict *restrict MCTS_mastTbl;
+static MASTRecord *restrict MCTS_mastRes;
+static uint16_t MAST_index;
 
 static bool (*MCTSNode_Connect4_evaluate)(MCTSNode *const restrict, const Connect4 *const restrict);
 //static double (*MCTSNode_Connect4_simulate)(Connect4 *const restrict);
 //static void (*MCTSResult_print)(const MCTSResult *const restrict);
+
+/////////////////////////////////////
+/// @brief  Warms up the MAST table.
+/////////////////////////////////////
+static inline void MAST_init(void)
+{
+    MCTS_mastTbl = REC_calloc(2, sizeof(*MCTS_mastTbl), "Could not allocate memory for the MAST table (global).", true);
+    MCTS_mastTbl[0] = REC_calloc(1 << 8, sizeof(*MCTS_mastTbl[0]), "Could not allocate memory for the MAST table (Player 1).", true);
+    MCTS_mastTbl[1] = REC_calloc(1 << 8, sizeof(*MCTS_mastTbl[1]), "Could not allocate memory for the MAST table (Player 2).", true);
+    MCTS_mastRes = REC_calloc(1 << 16, sizeof(*MCTS_mastRes), "Could not allocate memory for the MAST results.", true);
+}
+
+////////////////////////////////////////////////////
+/// @brief  Frees resources used by the MAST table.
+////////////////////////////////////////////////////
+static inline void MAST_destroy(void)
+{
+    REC_free(MCTS_mastTbl[0]);
+    REC_free(MCTS_mastTbl[1]);
+    REC_free(MCTS_mastTbl);
+    REC_free(MCTS_mastRes);
+}
+
+////////////////////////////////////////////////////////////////
+/// @brief  Updates the MAST table with new simulation results.
+/// @param  _SCORE
+/// @param  _TURN
+////////////////////////////////////////////////////////////////
+static inline void MAST_update(const double _SCORE, const bool _TURN)
+{
+    do
+    {
+        const MASTRecord *const restrict MAST_RES = &MCTS_mastRes[--MAST_index];
+        MASTEntry *const restrict mastEntry = &MCTS_mastTbl[MAST_RES->turn][MAST_RES->move];
+
+        mastEntry->visits++;
+        mastEntry->score += _TURN == MAST_RES->turn ? _SCORE : -_SCORE;
+    }
+    while (MAST_index);
+}
+
+////////////////////////////////////////////////////////////////
+/// @brief  Picks the maximum score from a set of MAST entries.
+/// @param  _CNT
+/// @param  _TURN
+////////////////////////////////////////////////////////////////
+static inline uint8_t MAST_select(const uint8_t _CNT, const bool _TURN)
+{
+    if (Xoshiro128pp_nextN(&g_rng, MAST_1_EPSILON) > MAST_EPSILON)
+    {
+        double bestScore = -DBL_MAX;
+        uint8_t mastMove = 0;
+
+        for (uint8_t i = 0; i < _CNT; i++)
+        {
+            const MASTEntry *const restrict entry = &MCTS_mastTbl[_TURN][MCTS_movArr[i]];
+            const double CURR_SCORE = entry->visits ? entry->score / entry->visits : 0.0;
+
+            if (CURR_SCORE > bestScore)
+            {
+                bestScore = CURR_SCORE;
+                mastMove = MCTS_movArr[i];
+            }
+        }
+
+        return mastMove;
+    }
+
+    return MCTS_movArr[Xoshiro128pp_nextN(&g_rng, _CNT)];
+}
 
 //////////////////////////////////////////////////////
 /// @brief  Returns the index of a node in the table.
@@ -193,7 +290,7 @@ static inline void MCTSTable_destroy(MCTSTable *const restrict _mt)
 //////////////////////////////////////////////////
 static inline bool MCTSNode_depthLimit(MCTSNode *const restrict _node)
 {
-    if (_node->depth == UINT8_MAX)
+    if (_node->depth == MCTS_MAX_DEPTH)
     {
         _node->wdl = MCTS_DRAW;
 
@@ -415,60 +512,78 @@ static inline void MCTSNode_prune(MCTSNode *const restrict _node)
 /////////////////////////////////////////////////////////////////
 static inline bool MCTSNode_prove(MCTSNode *const restrict _node)
 {
-    uint8_t losses = 0, nones = 0;
-    bool draw = false;
-
-    for (uint8_t i = 0; i < _node->count; i++)
+    if (_node->count)
     {
-        const MCTSNode *const restrict child = _node->descendants[i];
-        const bool SAME_TURN = child->turn == _node->turn;
+        bool hasDraw = false, allKnown = true;
 
-        switch (child->wdl)
-        {
-        case MCTS_LOSS:
-            if (!SAME_TURN)
-            {
-                _node->wdl = MCTS_WIN;
-                MCTSNode_prune(_node);
-                return true;
-            }
-            losses++;
-            break;
-        case MCTS_DRAW:
-            draw = true;
-            break;
-        case MCTS_WIN:
-            if (SAME_TURN)
-            {
-                _node->wdl = MCTS_WIN;
-                MCTSNode_prune(_node);
-                return true;
-            }
-            losses++;
-            break;
-        default:
-            nones++;
-            break;
-        }
-    }
+        const bool SAME_TURN = _node->turn == _node->descendants[0]->turn;
 
-    if (!nones)
-    {
-        if (draw)
+        for (uint8_t i = 0; i < _node->count; i++)
         {
-            _node->wdl = MCTS_DRAW;
+            const MCTSNode *const restrict child = _node->descendants[i];
+
+            switch (child->wdl)
+            {
+            case MCTS_LOSS:
+                if (!SAME_TURN)
+                {
+                    goto MCTSNode_inheritOutcome;
+                }
+                continue;
+            case MCTS_DRAW:
+                hasDraw = true;
+                continue;
+            case MCTS_WIN:
+                if (SAME_TURN)
+                {
+                    goto MCTSNode_inheritOutcome;
+                }
+                continue;
+            default:
+                allKnown = false;
+                continue;
+            }
+
+        MCTSNode_inheritOutcome:
+            _node->wdl = MCTS_WIN;
+        MCTSNode_pruneChildren:
             MCTSNode_prune(_node);
             return true;
         }
-        else if (losses && losses == _node->count)
+
+        if (allKnown)
         {
-            _node->wdl = MCTS_LOSS;
-            MCTSNode_prune(_node);
-            return true;
+            if (hasDraw)
+            {
+                _node->wdl = MCTS_DRAW;
+                goto MCTSNode_pruneChildren;
+            }
+            else
+            {
+                _node->wdl = MCTS_LOSS;
+                goto MCTSNode_pruneChildren;
+            }
         }
     }
 
     return false;
+}
+
+//////////////////////////////////////////
+/// @brief  Adjusts a reward toward zero.
+/// @param  _simReward
+/// @param  _NODE_SCORE
+//////////////////////////////////////////
+static inline void MCTSNode_adjustReward(double *const restrict _simReward, const double _NODE_SCORE)
+{
+    if (_NODE_SCORE > 0.0)
+    {
+        *_simReward = -1.0;
+    }
+    else if (_NODE_SCORE < 0.0)
+    {
+        *_simReward = 1.0;
+    }
 }
 
 //////////////////////////////////////////////////////
@@ -668,22 +783,25 @@ static inline double MCTSNode_Connect4_simulate(Connect4 *const restrict _c4, Co
     const bool SIM_POP10 = C4_variant == CONNECT4_POP10;
     const bool SIM_TURN = SIM_POP10 ? _p10->turn : _c4->plies & 1;
 
-    uint8_t simCnt; MCTSWDL simWDL;
+    uint8_t simCnt; MCTSWDL simWDL; MAST_index = 1;
 
     for (;;)
     {
         if ((simWDL = MCTSTable_WDL(&MCTS_table, Connect4_lock(_c4) | (SIM_POP10 * Connect4_pop10_key(_p10)))) != MCTS_NONE)
         {
-            const double SCORE = simWDL == MCTS_WIN ? 2.0 : simWDL == MCTS_LOSS ? -2.0 : 0.0;
+            const double TBL_RES = simWDL == MCTS_WIN ? 3.0 : simWDL == MCTS_LOSS ? -3.0 : 0.0;
 
-            return SIM_TURN == (SIM_POP10 ? _p10->turn : (_c4->plies & 1)) ? -SCORE : SCORE;
+            return SIM_TURN == (SIM_POP10 ? _p10->turn : (_c4->plies & 1)) ? -TBL_RES : TBL_RES;
         }
 
         SIM_POP10 ? Connect4_pop10_generate(_c4, _p10, MCTS_movArr, &simCnt) : Connect4_generate(_c4, MCTS_movArr, &simCnt);
 
         if (simCnt && _c4->plies < UINT16_MAX)
         {
-            const uint8_t SIM_MOVE = MCTS_movArr[Xoshiro128pp_nextN(&g_rng, simCnt)];
+            const uint8_t SIM_MOVE = MAST_select(simCnt, SIM_TURN); // MCTS_movArr[Xoshiro128pp_nextN(&g_rng, simCnt)];
+
+            MCTS_mastRes[MAST_index].move = SIM_MOVE;
+            MCTS_mastRes[MAST_index++].turn = SIM_POP10 ? _p10->turn : _c4->plies & 1;
 
             SIM_POP10 ? Connect4_pop10_play(_c4, _p10, SIM_MOVE) : Connect4_play(_c4, SIM_MOVE);
 
@@ -715,26 +833,28 @@ static inline double MCTSNode_Make7_simulate(Make7 *const restrict _m7)
 {
     const bool SIM_TURN = Make7_moves(_m7) & 1;
 
-    uint8_t simCnt; MCTSWDL simWDL; bool playTurn = SIM_TURN;
+    uint8_t simCnt; MCTSWDL simWDL; bool playTurn = SIM_TURN; MAST_index = 1;
 
     for (;;)
     {
         if ((simWDL = MCTSTable_WDL(&MCTS_table, Make7_lock(_m7))) != MCTS_NONE)
         {
-            const double SCORE = simWDL == MCTS_WIN ? 2.0 : simWDL == MCTS_LOSS ? -2.0 : 0.0;
+            const double TBL_RES = simWDL == MCTS_WIN ? 3.0 : simWDL == MCTS_LOSS ? -3.0 : 0.0;
 
-            return SIM_TURN == playTurn ? -SCORE : SCORE;
+            return SIM_TURN == playTurn ? -TBL_RES : TBL_RES;
         }
 
         Make7_generate(_m7, MCTS_movArr, &simCnt);
 
         if (simCnt)
         {
-            const uint8_t SIM_MOVE = MCTS_movArr[Xoshiro128pp_nextN(&g_rng, simCnt)];
+            const uint8_t SIM_MOVE = MAST_select(simCnt, SIM_TURN); // MCTS_movArr[Xoshiro128pp_nextN(&g_rng, simCnt)];
+
+            MCTS_mastRes[MAST_index].move = SIM_MOVE;
+            MCTS_mastRes[MAST_index++].turn = playTurn;
+            playTurn = !playTurn;
 
             Make7_drop(_m7, SIM_MOVE >> 3, SIM_MOVE & 7);
-
-            playTurn = !playTurn;
 
             if (Make7_targetSum(_m7))
             {
@@ -753,25 +873,30 @@ static inline double MCTSNode_Make7_simulate(Make7 *const restrict _m7)
 /// @param  _node   Leaf node.
 /// @param  _score  Playout score.
 ///////////////////////////////////////////////////////////////////
-static inline void MCTSNode_backpropagate(MCTSNode *restrict _node, double _score)
+static inline void MCTSNode_backpropagate(MCTSNode *restrict _node, double _score, const MCTSWDL _WDL)
 {
     while (_node)
     {
         _node->visits++;
+        _WDL == MCTS_DRAW ? MCTSNode_adjustReward(&_score, _node->score) : FTW_VOID_NOP;
         _node->score += _score;
+
+        MCTSNode_prove(_node) ? MCTSTable_insert(&MCTS_table, _node->lock, _node->wdl) : FTW_VOID_NOP;
 
         MCTSNode *const restrict parent = _node->ancestor;
 
-        if (MCTSNode_prove(_node) /*&& parent*/)
-        {
+        parent && parent->turn != _node->turn ? _score = -_score : FTW_VOID_NOP;
+
+        //if (MCTSNode_prove(_node) /*&& parent*/)
+        /*{
             MCTSTable_insert(&MCTS_table, _node->lock, _node->wdl);
             //MCTSNode_swap(parent, _node);
-        }
+        }*/
 
-        if (parent && parent->turn != _node->turn)
+        /*if (parent && parent->turn != _node->turn)
         {
             _score = -_score;
-        }
+        }*/
 
         _node = parent;
     }
@@ -884,7 +1009,7 @@ static inline void MCTSResult_print(const MCTSResult *const restrict _RES)
         printf("\r\e[1;91m%c%c %s\e[0m %u %" PRIu64 " %" PRIu64 " %" PRIu64 "        ", M_NOTE_A, M_NOTE_B, FTW_STR_LOSS, _RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
         break;
     default:
-        printf("\r\e[1m%c%c\e[0m %.3f %u %" PRIu64 " %" PRIu64 " %" PRIu64 " ", M_NOTE_A, M_NOTE_B, _RES->reward, _RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
+        printf("\r%c%c %.3f %u %" PRIu64 " %" PRIu64 " %" PRIu64 " ", M_NOTE_A, M_NOTE_B, _RES->reward, _RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
         fflush(stdout);
         break;
     }
@@ -972,6 +1097,7 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
     rootNode.turn = MCTS_MAKE7 ? Make7_moves(_M7) & 1 : (MCTS_POP10 ? _P10->turn : _C4->plies & 1);
 
     MCTSTable_init(&MCTS_table, NS_table.size);
+    MAST_init();
 
 #ifdef FTW_NODEPOOL
     MemoryPool_init(&MCTS_nodePool);
@@ -1019,24 +1145,26 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
         }
 
         double reward; mctsRes.depth = leaf->depth;
+        MCTS_mastRes[0] = (MASTRecord) { .move = leaf->move, .turn = rootNode.turn };
 
         switch (leaf->wdl)
         {
         case MCTS_LOSS:
-            reward = C4_variant == CONNECT4_MISERE ? -3.0 : 3.0;
+            reward = C4_variant == CONNECT4_MISERE ? -5.0 : 5.0;
             break;
         case MCTS_WIN:
-            reward = C4_variant == CONNECT4_MISERE ? 3.0 : -3.0;
+            reward = C4_variant == CONNECT4_MISERE ? 5.0 : -5.0;
             break;
         case MCTS_DRAW:
             reward = 0.0;
             break;
         default:
             reward = MCTS_MAKE7 ? MCTSNode_Make7_simulate(&mctsM7) : MCTSNode_Connect4_simulate(&mctsC4, &mctsP10);
+            MAST_update(reward, rootNode.turn);
             break;
         }
 
-        MCTSNode_backpropagate(leaf, reward);
+        MCTSNode_backpropagate(leaf, reward, leaf->wdl);
 
         if (MCTS_MAKE7)
         {
@@ -1061,6 +1189,7 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
     REC_thrd_join(progThrd, nullptr, "Could not join the MCTS progress thread.", true);
     MCTSNode_destroy(&rootNode);
     MCTSTable_destroy(&MCTS_table);
+    MAST_destroy();
 
 #ifdef FTW_NODEPOOL
     MemoryPool_destroy(&MCTS_nodePool);
