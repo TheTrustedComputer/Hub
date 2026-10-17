@@ -369,7 +369,7 @@ static inline bool Make7_targetSum(const Make7 *const restrict _M7)
     const uint64_t PLAYER_ALL_BITMASK = _M7->side ^ _M7->mask;
     const uint8_t LAST_DROP_TILE_INDEX = stdc_trailing_zeros_ull(_M7->lastT);
 
-    if ((LAST_DROP_TILE_INDEX != 64) && (PLAYER_ALL_BITMASK & ADJ_BITMASK_TABLE[LAST_DROP_TILE_INDEX]))
+    if (LAST_DROP_TILE_INDEX != 64 && (PLAYER_ALL_BITMASK & ADJ_BITMASK_TABLE[LAST_DROP_TILE_INDEX]))
     {
         const uint64_t NONLAST_TILE_BITMASK = PLAYER_ALL_BITMASK ^ _M7->lastT;
 
@@ -477,7 +477,7 @@ static inline bool Make7_canWin(const Make7 *const restrict _M7)
 /// @param  _MOV    Move to add.
 /// @param  _POS    Array position.
 ////////////////////////////////////////////////////////////////////
-static inline void Make7_append(uint8_t _arr[restrict static MAKE7_SIZE_X3], uint8_t *const restrict _num, const uint8_t _MOV, const uint8_t _POS)
+static inline void Make7_append(uint8_t _arr[const restrict static MAKE7_SIZE_X3], uint8_t *const restrict _num, const uint8_t _MOV, const uint8_t _POS)
 {
     _arr[(*_num)++] = _MOV;
 
@@ -505,7 +505,7 @@ static inline void Make7_append(uint8_t _arr[restrict static MAKE7_SIZE_X3], uin
 /// @param  _arr
 /// @param  _num
 //////////////////////////////////////////////////////////////////////
-static inline void Make7_generate(const Make7 *const restrict _M7, uint8_t _arr[restrict static MAKE7_SIZE_X3], uint8_t *const restrict _num)
+static inline void Make7_generate(const Make7 *const restrict _M7, uint8_t _arr[const restrict static MAKE7_SIZE_X3], uint8_t *const restrict _num)
 {
     const uint8_t OFF_TILES[3] = Make7_offTileCounts(_M7);
     const uint64_t DROP_COL_MASK = Connect4_dropMask(_M7->mask, MAKE7_BOT, MAKE7_ALL);
@@ -1306,7 +1306,7 @@ static inline void Make7_canonicalize(const uint64_t _K0, const uint64_t _K1, co
 /// @param  _INPUT  Letter (column) and number (tile) string.
 /// @return         `true` if successful; otherwise `false`.
 /////////////////////////////////////////////////////////////////
-static inline bool Make7_parse(Make7 *const restrict _m7, const char _INPUT[restrict static 2])
+static inline bool Make7_parse(Make7 *const restrict _m7, const char _INPUT[const restrict static 2])
 {
     const uint8_t TILE_TOKEN = _INPUT[0] - '1';
     const uint8_t COL_TOKEN = toupper(_INPUT[1]) - 'A';

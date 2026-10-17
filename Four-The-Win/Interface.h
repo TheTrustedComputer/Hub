@@ -1351,8 +1351,10 @@ static inline void Interface_run(void)
 
             Make7_setTargetMode();
             printf(FTW_STR_WIN_MODE, M7_targetMode ? FTW_STR_WINDOW : FTW_STR_EXACT);
+            Make7_reset(&UI_m7);
+            Make7_print(&UI_m7);
 
-            showWinMsg = solved = false;
+            solved = false;
         }
         else if (isdigit(*cmd) || (UI_IS_POPOUT_OR_POP10 && strpbrk(cmd, popTokens)))
         {

@@ -674,7 +674,7 @@ static inline Result NegaScout_Connect4_popout_iterative(Connect4 *const restric
 
         if (vals[0] == vals[1]) // || DELTA == nodeDelta))
         {
-            if (++drawFixedPoints == 2)
+            if (++drawFixedPoints == 3)
             {
                 goto NegaScout_Connect4_popout_iterative_solved;
             }
@@ -797,7 +797,7 @@ static inline Result NegaScout_Make7_iterative(const Make7 *const restrict _M7, 
     {
         _PRINT ? printf(FTW_STR_SOLVING_FINITE, i, DEPTH), fflush(stdout) : FTW_VOID_NOP;
 
-        if (abs((val = NegaScout_Make7_search(_M7, i, -NS_PROG, NS_PROG))) >= NS_WIN_THR || val == NS_DRAW)
+        if (abs((val = NegaScout_Make7_search(_M7, i, -NS_PROG, NS_PROG))) >= NS_WIN_THR)
         {
             break;
         }

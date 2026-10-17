@@ -206,9 +206,9 @@ static void (*Connect4_unplay)(Connect4 *const restrict);
 static bool (*Connect4_playable)(const Connect4 *const restrict, const uint8_t);
 static void (*Connect4_moves)(const Connect4 *const restrict);
 static uint8_t (*Connect4_sequence)(const uint8_t);
-static void (*Connect4_generate)(const Connect4 *const restrict, uint8_t[restrict static 4], uint8_t *const restrict);
-static void (*Connect4_generateAll)(const Connect4 *const restrict, uint8_t[restrict static 4], uint8_t *const restrict);
-static void (*Connect4_genNonLosing)(const Connect4 *const restrict, uint8_t[restrict static 4], uint8_t *const restrict);
+static void (*Connect4_generate)(const Connect4 *const restrict, uint8_t[const restrict static 4], uint8_t *const restrict);
+static void (*Connect4_generateAll)(const Connect4 *const restrict, uint8_t[const restrict static 4], uint8_t *const restrict);
+static void (*Connect4_genNonLosing)(const Connect4 *const restrict, uint8_t[const restrict static 4], uint8_t *const restrict);
 static bool (*Connect4_fourInARow)(const Board);
 static Board (*Connect4_fourInARow_threats)(const Board);
 static bool (*Connect4_over)(const Connect4 *const restrict);
@@ -564,7 +564,7 @@ static inline void Connect4_popout_moves(const Connect4 *const restrict _C4)
 /// @param _POS Array position.
 /// @param _RNK Move sort rank.
 //////////////////////////////////////////////////////////
-static inline void Connect4_append(uint8_t _arr[restrict static 4], uint8_t *const restrict _num, const uint8_t _MOV, const uint8_t _POS, const uint8_t _RNK)
+static inline void Connect4_append(uint8_t _arr[const restrict static 4], uint8_t *const restrict _num, const uint8_t _MOV, const uint8_t _POS, const uint8_t _RNK)
 {
     _arr[(*_num)++] = _MOV;
 
@@ -595,7 +595,7 @@ static inline void Connect4_append(uint8_t _arr[restrict static 4], uint8_t *con
 /// @param  _WND
 /// @param  _SWP Whether to swap the move.
 //////////////////////////////////////////////////////////////////////////
-static inline void Connect4_pop10_append(uint8_t _arr[restrict static 4], uint8_t *const restrict _num, const uint8_t _MOV, const uint8_t _POS, const uint8_t _WND, const bool _SWP)
+static inline void Connect4_pop10_append(uint8_t _arr[const restrict static 4], uint8_t *const restrict _num, const uint8_t _MOV, const uint8_t _POS, const uint8_t _WND, const bool _SWP)
 {
     _arr[(*_num)++] = _MOV;
 
@@ -945,7 +945,7 @@ static inline Board Connect4_original_fourInARow_threats(const Board _S)
     n >>= ROWS_P2_X3;
     m |= (n & _S << ROWS_P2) | (n & _S >> ROWS_P2_X3);
 
-    return m; // We AND with a drop mask later, so `m & ~mask & ALL_MASK` does nothing
+    return m; // We AND with a drop mask later, so `... & ~mask & ALL_MASK` is a no-op
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -1215,7 +1215,7 @@ static inline uint8_t Connect4_pop10_turnUpperBound(void)
 /// @param  _arr    Output array to store the moves.
 /// @param  _num    Output variable to save this count.
 /////////////////////////////////////////////////////////////
-static inline void Connect4_original_genMoveBody(Board _mask, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
+static inline void Connect4_original_genMoveBody(Board _mask, uint8_t _arr[const restrict static 4], uint8_t *const restrict _num)
 {
     while (_mask)
     {
@@ -1253,7 +1253,7 @@ static inline void Connect4_original_genMoveBody(Board _mask, uint8_t _arr[restr
 /// @param  _arr
 /// @param  _num
 /////////////////////////////////////////////////////////////////
-static inline void Connect4_popout_genMoveBody(Board _mask, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
+static inline void Connect4_popout_genMoveBody(Board _mask, uint8_t _arr[const restrict static 4], uint8_t *const restrict _num)
 {
     while (_mask)
     {
@@ -1291,7 +1291,7 @@ static inline void Connect4_popout_genMoveBody(Board _mask, uint8_t _arr[restric
 /// @param  _arr
 /// @param  _num
 //////////////////////////////////////////////////////////////
-static inline void Connect4_original_genMoveBodyOrder(Board _mask, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
+static inline void Connect4_original_genMoveBodyOrder(Board _mask, uint8_t _arr[const restrict static 4], uint8_t *const restrict _num)
 {
     while (_mask)
     {
@@ -1329,7 +1329,7 @@ static inline void Connect4_original_genMoveBodyOrder(Board _mask, uint8_t _arr[
 /// @param  _arr
 /// @param  _num
 //////////////////////////////////////////////////////////////////////
-static inline void Connect4_popout_genMoveBodyOrder(Board _mask, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
+static inline void Connect4_popout_genMoveBodyOrder(Board _mask, uint8_t _arr[const restrict static 4], uint8_t *const restrict _num)
 {
     const uint8_t NUM = *_num;
 
@@ -1370,7 +1370,7 @@ static inline void Connect4_popout_genMoveBodyOrder(Board _mask, uint8_t _arr[re
 /// @param  _arr
 /// @param  _num
 /////////////////////////////////////////////////////////////////////
-static inline void Connect4_pop10_genMoveBodyOrder(const Board _SIDE, Board _mask, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
+static inline void Connect4_pop10_genMoveBodyOrder(const Board _SIDE, Board _mask, uint8_t _arr[const restrict static 4], uint8_t *const restrict _num)
 {
     uint8_t window = 0;
 
@@ -1419,16 +1419,13 @@ static inline void Connect4_pop10_genMoveBodyOrder(const Board _SIDE, Board _mas
 /// @param  _arr
 /// @param  _num
 ///////////////////////////////////////////////////////////////////
-static inline void Connect4_original_generate(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
+static inline void Connect4_original_generate(const Connect4 *const restrict _C4, uint8_t _arr[const restrict static 4], uint8_t *const restrict _num)
 {
-    Board dropMask = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK); *_num = 0;
+    const Board DROP_MASK = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK); *_num = 0;
+    const Board PL_THREATS = Connect4_fourInARow_threats(_C4->side) & DROP_MASK;
+    const Board OP_THREATS = Connect4_fourInARow_threats(_C4->side ^ _C4->mask) & DROP_MASK;
 
-    const Board PL_THREATS = Connect4_fourInARow_threats(_C4->side) & dropMask;
-    const Board OP_THREATS = Connect4_fourInARow_threats(_C4->side ^ _C4->mask) & dropMask;
-
-    dropMask = PL_THREATS ? PL_THREATS : (OP_THREATS ? OP_THREATS : dropMask);
-
-    Connect4_original_genMoveBody(dropMask, _arr, _num);
+    Connect4_original_genMoveBody(PL_THREATS ? PL_THREATS : (OP_THREATS ? OP_THREATS : DROP_MASK), _arr, _num);
 }
 
 ////////////////////////////////////////////////////////////////
@@ -1437,21 +1434,18 @@ static inline void Connect4_original_generate(const Connect4 *const restrict _C4
 /// @param  _arr
 /// @param  _num
 ////////////////////////////////////////////////////////////////
-static inline void Connect4_misere_generate(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
+static inline void Connect4_misere_generate(const Connect4 *const restrict _C4, uint8_t _arr[const restrict static 4], uint8_t *const restrict _num)
 {
-    Board dropMask = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK); *_num = 0;
+    const Board DROP_MASK = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK); *_num = 0;
+    const Board PL_THREATS = Connect4_fourInARow_threats(_C4->side) & DROP_MASK;
 
-    const Board PL_THREATS = Connect4_fourInARow_threats(_C4->side) & dropMask;
-
-    dropMask = PL_THREATS && PL_THREATS != dropMask ? dropMask ^ PL_THREATS : dropMask;
-
-    Connect4_original_genMoveBody(dropMask, _arr, _num);
+    Connect4_original_genMoveBody(PL_THREATS && PL_THREATS != DROP_MASK ? DROP_MASK ^ PL_THREATS : DROP_MASK, _arr, _num);
 }
 
 //////////////////////////////////////////////////////////
 /// @brief  Compiles a list of moves in Connect 4 PopOut.
 //////////////////////////////////////////////////////////
-static inline void Connect4_popout_generate(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
+static inline void Connect4_popout_generate(const Connect4 *const restrict _C4, uint8_t _arr[const restrict static 4], uint8_t *const restrict _num)
 {
     Connect4_original_generate(_C4, _arr, _num);
     Connect4_popout_genMoveBody(Connect4_popMask(_C4->side), _arr, _num);
@@ -1464,7 +1458,7 @@ static inline void Connect4_popout_generate(const Connect4 *const restrict _C4, 
 /// @param  _arr
 /// @param  _num
 ///////////////////////////////////////
-static inline void Connect4_pop10_generate(const Connect4 *const restrict _C4, Connect4_Pop10 *const restrict _p10, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
+static inline void Connect4_pop10_generate(const Connect4 *const restrict _C4, Connect4_Pop10 *const restrict _p10, uint8_t _arr[const restrict static 4], uint8_t *const restrict _num)
 {
     *_num = 0;
 
@@ -1487,11 +1481,11 @@ static inline void Connect4_pop10_generate(const Connect4 *const restrict _C4, C
 /// @param  _arr
 /// @param  _num
 ////////////////////////////////////////////////////////////////////////////////////
-static inline void Connect4_original_generateAll(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
+static inline void Connect4_original_generateAll(const Connect4 *const restrict _C4, uint8_t _arr[const restrict static 4], uint8_t *const restrict _num)
 {
-    Board dropMask = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK); *_num = 0;
+    *_num = 0;
 
-    Connect4_original_genMoveBody(dropMask, _arr, _num);
+    Connect4_original_genMoveBody(Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK), _arr, _num);
 }
 
 ///////////////////////////////////////////////////////////////////
@@ -1500,7 +1494,7 @@ static inline void Connect4_original_generateAll(const Connect4 *const restrict 
 /// @param  _arr
 /// @param  _num
 ///////////////////////////////////////////////////////////////////
-static inline void Connect4_popout_generateAll(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
+static inline void Connect4_popout_generateAll(const Connect4 *const restrict _C4, uint8_t _arr[const restrict static 4], uint8_t *const restrict _num)
 {
     Connect4_original_generateAll(_C4, _arr, _num);
     Connect4_popout_genMoveBody(Connect4_popMask(_C4->side), _arr, _num);
@@ -1510,20 +1504,25 @@ static inline void Connect4_popout_generateAll(const Connect4 *const restrict _C
 /// @brief      Non-losing version of `Connect4_original_generate()`.
 /// @details    Reduces node evaluations for minimax search.
 //////////////////////////////////////////////////////////////////////
-static inline void Connect4_original_genNonLosing(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
+static inline void Connect4_original_genNonLosing(const Connect4 *const restrict _C4, uint8_t _arr[const restrict static 4], uint8_t *const restrict _num)
 {
-    Board dropMask = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK); *_num = 0;
-    Board opThreats = Connect4_fourInARow_threats(_C4->side ^ _C4->mask) & dropMask;
+    const Board OP_THREATS = Connect4_fourInARow_threats(_C4->side ^ _C4->mask);
+
+    Board dropMask = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK);
+    Board forced = OP_THREATS & dropMask; *_num = 0;
 
 #if FTW_C4_MAX_BITS > 64 // cannot avoid losing; limit to 1 branch
-    Connect4_popcnt(opThreats) > 1 ? (opThreats &= opThreats - 1) : FTW_VOID_NOP;
+    Connect4_popcnt(forced) > 1 ? (forced &= -forced) : FTW_VOID_NOP;
 #else
-    stdc_count_ones_ull(opThreats) > 1 ? (opThreats &= opThreats - 1) : FTW_VOID_NOP;
+    stdc_count_ones_ull(forced) > 1 ? (forced &= -forced) : FTW_VOID_NOP;
 #endif
 
-    dropMask = opThreats ? opThreats : dropMask;
+    forced ? (dropMask = forced) : FTW_VOID_NOP;
 
-    Connect4_original_genMoveBodyOrder(dropMask, _arr, _num);
+    // Discard drops under opponent's threat (may become zero)
+    const Board NEW_MASK = dropMask & ~((OP_THREATS & ALL_MASK) >> 1);
+
+    Connect4_original_genMoveBodyOrder(NEW_MASK ? NEW_MASK : dropMask, _arr, _num);
 }
 
 //////////////////////////////////////////////////////////////////
@@ -1532,15 +1531,12 @@ static inline void Connect4_original_genNonLosing(const Connect4 *const restrict
 /// @param  _arr
 /// @param  _num
 //////////////////////////////////////////////////////////////////
-static inline void Connect4_misere_genNonLosing(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
+static inline void Connect4_misere_genNonLosing(const Connect4 *const restrict _C4, uint8_t _arr[const restrict static 4], uint8_t *const restrict _num)
 {
-    Board dropMask = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK); *_num = 0;
+    const Board DROP_MASK = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK); *_num = 0;
+    const Board PL_THREATS = Connect4_fourInARow_threats(_C4->side) & DROP_MASK;
 
-    const Board PL_THREATS = Connect4_fourInARow_threats(_C4->side) & dropMask;
-
-    dropMask = PL_THREATS ? dropMask ^ PL_THREATS : dropMask;
-
-    Connect4_original_genMoveBodyOrder(dropMask, _arr, _num);
+    Connect4_original_genMoveBodyOrder(PL_THREATS ? DROP_MASK ^ PL_THREATS : DROP_MASK, _arr, _num);
 }
 
 //////////////////////////////////////////////////////////
@@ -1549,10 +1545,17 @@ static inline void Connect4_misere_genNonLosing(const Connect4 *const restrict _
 /// @param  _arr
 /// @param  _num
 //////////////////////////////////////////////////////////
-static inline void Connect4_popout_genNonLosing(const Connect4 *const restrict _C4, uint8_t _arr[restrict static 4], uint8_t *const restrict _num)
+static inline void Connect4_popout_genNonLosing(const Connect4 *const restrict _C4, uint8_t _arr[const restrict static 4], uint8_t *const restrict _num)
 {
     Connect4_original_genNonLosing(_C4, _arr, _num);
-    Connect4_popout_genMoveBodyOrder(Connect4_popMask(_C4->side), _arr, _num);
+
+    const Board OP_SIDE = _C4->side ^ _C4->mask;
+
+    // Vertical threat exists and a drop blocks it
+    if (!((OP_SIDE << 1 & OP_SIDE << 2 & OP_SIDE << 3) & (Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK))))
+    {
+        Connect4_popout_genMoveBodyOrder(Connect4_popMask(_C4->side), _arr, _num);
+    }
 }
 
 /////////////////////////////////////////////////////
@@ -1813,52 +1816,6 @@ static inline Board Connect4_key(const Connect4 *const restrict _C4)
 {
     return _C4->mask + _C4->side;
 }
-
-#ifdef FTW_AI_DEBUG
-/**
- * @brief Reconstruct the bitboards represented by a perfect Connect 4 key.
- *
- * Within one column of height `h`, `mask` is `(1 << h) - 1` and
- * `side` is a subset of that mask. Consequently, `mask + side` occupies the
- * disjoint interval `[2^h - 1, 2^(h + 1) - 2]`; this makes the column height
- * and both bitboards recoverable without move history.
- *
- * @param _c4 State receiving the decoded bitboards. Its existing `hist`
- *            pointer is preserved, and `plies` is reset to zero.
- * @param _KEY Raw key returned by Connect4_key().
- */
-static inline void Connect4_fromKey(Connect4 *const restrict _c4,
-                                    const Board _KEY)
-{
-    Board mask = 0, side = 0;
-
-    for (uint8_t column = 0; column < COLS; column++)
-    {
-        const uint8_t OFFSET = ROWS_P1 * column;
-        const Board COLUMN_KEY = _KEY >> OFFSET & ALL_COL_MASK;
-        Board value = COLUMN_KEY + 1;
-        uint8_t height = 0;
-
-        while (value >>= 1)
-        {
-            height++;
-        }
-
-        assert(height <= ROWS);
-        const Board COLUMN_MASK = (BOARD(1) << height) - 1;
-        const Board COLUMN_SIDE = COLUMN_KEY - COLUMN_MASK;
-        assert(!(COLUMN_SIDE & ~COLUMN_MASK));
-
-        mask |= COLUMN_MASK << OFFSET;
-        side |= COLUMN_SIDE << OFFSET;
-    }
-
-    _c4->mask = mask;
-    _c4->side = side;
-    _c4->plies = 0;
-    assert(Connect4_key(_c4) == _KEY);
-}
-#endif
 
 ////////////////////////////////////////////////
 /// @brief  Hash keys for Pop 10's state field.

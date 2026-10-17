@@ -16,6 +16,7 @@ FTW's goal is to analyze, prove, and visualize the outcomes of Connect 4 and its
 - **Hybrid MCTS-PNS** engine combining probabilistic sampling with proof propagation.
 - **SQLite caching** for the persistent lookup of already predetermined outcomes.
 - **libdivide/fastmod** for runtime constant divisor and fast remainder arithmetic.
+- **xxhash** as an alternative hash function for transposition table keys.
 - **Command-line interface** for testing, benchmarking, and exploring positions.
 - **Clean modular architecture**, no external dependencies beyond SQLite, libdivide, or fastmod.
 
@@ -45,9 +46,10 @@ Before downloading dependencies from their respective websites, consider checkin
 
 - [libdivide](https://github.com/ridiculousfish/libdivide)
 - [fastmod](https://github.com/lemire/fastmod)
+- [xxhash](https://xxhash.com)
 - [SQLite](https://sqlite.org)
 - [GNU Make](https://www.gnu.org/software/make)
 
 ## Contributing
 
-We welcome pull requests. If you have a suggestion for enhancing FTW, please submit it for review. Be sure to document your changes and briefly explain your reasoning. We do not mind if you use AI assistance, but please verify your work for inconsistencies. Discrepancies between your code and your description will cause unnecessary delays.
+We welcome pull requests. If you have a suggestion for enhancing FTW, please submit it for review. Be sure to document your changes and briefly explain your reasoning. We do not mind if you use AI assistance, but please verify your work for inconsistencies. Discrepancies between your code and your description from AI slop will cause unnecessary delays.
