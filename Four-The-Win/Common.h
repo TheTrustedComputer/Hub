@@ -72,7 +72,6 @@ static inline int FourTheWin_monoTime(struct timespec *const restrict _ts)
     #include <windows.h>
 #endif
 
-#define FTW_VOID_NOP (void)(0)
 #define FTW_PROFILE_HOT __attribute__((hot))
 #define FTW_PROFILE_COLD __attribute__((cold))
 #define FTW_BRANCH_HOT(_x) __builtin_expect(_x, true)

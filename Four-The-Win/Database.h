@@ -138,7 +138,7 @@ static inline bool SQLite_Connect4_query(sqlite3 *const restrict _db, Board _key
 
     if (sqlite3_step(stmt) == SQLITE_ROW)
     {
-        _res ? *_res = Result_fromBLOB(sqlite3_column_blob(stmt, 0)) : FTW_VOID_NOP;
+        _res ? *_res = Result_fromBLOB(sqlite3_column_blob(stmt, 0)) : (Result){ 0 };
         sqlite3_finalize(stmt);
 
         return true;
@@ -175,7 +175,7 @@ static inline bool SQLite_Connect4_pop10_query(sqlite3 *const restrict _db, Boar
 
     if (sqlite3_step(stmt) == SQLITE_ROW)
     {
-        _res ? *_res = Result_fromBLOB(sqlite3_column_blob(stmt, 0)) : FTW_VOID_NOP;
+        _res ? *_res = Result_fromBLOB(sqlite3_column_blob(stmt, 0)) : (Result){ 0 };
         sqlite3_finalize(stmt);
 
         return true;
@@ -233,7 +233,7 @@ static inline bool SQLite_Make7_query(sqlite3 *const restrict _db, uint64_t _k0,
 
     if (sqlite3_step(stmt) == SQLITE_ROW)
     {
-        _res ? *_res = Result_fromBLOB(sqlite3_column_blob(stmt, 0)) : FTW_VOID_NOP;
+        _res ? *_res = Result_fromBLOB(sqlite3_column_blob(stmt, 0)) : (Result){ 0 };
         sqlite3_finalize(stmt);
 
         return true;

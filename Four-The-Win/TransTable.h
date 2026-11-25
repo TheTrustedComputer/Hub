@@ -283,7 +283,11 @@ static inline void TransBucket_store
 
         const uint16_t GRADE = te->depth;
 
-        GRADE < replaceGrade ? replaceGrade = GRADE, replaceBucket = i : FTW_VOID_NOP;
+        if (GRADE < replaceGrade)
+        {
+            replaceGrade = GRADE;
+            replaceBucket = i;
+        }
     }
 
     te = &_tb->entry[replaceBucket];

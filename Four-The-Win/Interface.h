@@ -60,6 +60,7 @@ static inline void Interface_help(void)
     printf(" quit       %s %s: q.\n", FTW_STR_CLOSE_APP, FTW_STR_SHORT_ALIAS);
     printf(" restart    Restart to the initial state. %s: r.\n", FTW_STR_SHORT_ALIAS);
     puts(" ruleset R  Switch the ruleset to R, or get the active one.");
+    puts(" seed       Generate a new random board state (Pop 10).");
     puts(" size W H   Set the game board dimensions to W x H (Connect 4).");
     printf(" solve      Solve this position. %s: s.\n", FTW_STR_SHORT_ALIAS);
     puts(" table T    Adjust the transposition table size (T = [inc/dec]).");
@@ -178,7 +179,7 @@ static inline void Interface_Make7_list(const Make7 *const restrict _M7)
         }
     }
 
-    hasMoves ? putchar('\n') : FTW_VOID_NOP;
+    hasMoves ? putchar('\n') : 0;
 }
 
 //////////////////////////////////////////////////////////////////
@@ -194,7 +195,7 @@ static inline void Interface_Make7_moves(const Make7 *const restrict _M7)
         printf("%c%c", (UI_m7MoveHist[i] >> 3) + '1', (UI_m7MoveHist[i] & 7) + 'A');
     }
 
-    M7_MOVES ? putchar('\n') : FTW_VOID_NOP;
+    M7_MOVES ? putchar('\n') : 0;
 }
 
 ////////////////////////////////////////////////////////
@@ -264,20 +265,20 @@ static inline void Interface_Connect4_oracle_dfs(Connect4 *const restrict _c4, c
 
             const bool C4_SYMM = Connect4_symmetric(_c4);
 
-            C4_SYMM ? (dDropCnt = (dDropCnt >> 1) + (dDropCnt & 1)) : FTW_VOID_NOP;
-            C4_SYMM ? (dPopCnt = (dPopCnt >> 1) + (dPopCnt & 1)) : FTW_VOID_NOP;
+            C4_SYMM ? (dDropCnt = (dDropCnt >> 1) + (dDropCnt & 1)) : 0;
+            C4_SYMM ? (dPopCnt = (dPopCnt >> 1) + (dPopCnt & 1)) : 0;
 
             for (i = 0; i < dDropCnt; i++)
             {
                 Connect4_drop(_c4, dDrop[i]);
-                !Connect4_over(_c4) ? Interface_Connect4_oracle_dfs(_c4, _DEP - 1, true) : FTW_VOID_NOP;
+                !Connect4_over(_c4) ? Interface_Connect4_oracle_dfs(_c4, _DEP - 1, true) : 0;
                 Connect4_undrop(_c4);
             }
 
             for (i = 0; i < dPopCnt; i++)
             {
                 Connect4_pop(_c4, dPop[i]);
-                !Connect4_over(_c4) ? Interface_Connect4_oracle_dfs(_c4, _DEP - 1, true) : FTW_VOID_NOP;
+                !Connect4_over(_c4) ? Interface_Connect4_oracle_dfs(_c4, _DEP - 1, true) : 0;
                 Connect4_unpop(_c4);
             }
         }
@@ -286,12 +287,12 @@ static inline void Interface_Connect4_oracle_dfs(Connect4 *const restrict _c4, c
             uint8_t dArr[MOVE_BOUNDS], dCnt = 0;
 
             Connect4_original_genMoveBody(Connect4_dropMask(_c4->mask, BOT_MASK, ALL_MASK), dArr, &dCnt);
-            Connect4_symmetric(_c4) ? (dCnt = (dCnt >> 1) + (dCnt & 1)) : FTW_VOID_NOP;
+            Connect4_symmetric(_c4) ? (dCnt = (dCnt >> 1) + (dCnt & 1)) : 0;
 
             for (uint8_t i = 0; i < dCnt; i++)
             {
                 Connect4_play(_c4, dArr[i]);
-                !Connect4_over(_c4) ? Interface_Connect4_oracle_dfs(_c4, _DEP - 1, false) : FTW_VOID_NOP;
+                !Connect4_over(_c4) ? Interface_Connect4_oracle_dfs(_c4, _DEP - 1, false) : 0;
                 Connect4_unplay(_c4);
             }
         }
@@ -371,8 +372,8 @@ static inline void Interface_Connect4_oracle(Connect4 *const restrict _c4, const
 
                 const bool C4_SYMM = Connect4_symmetric(bC4);
 
-                C4_SYMM ? (bDropCnt = (bDropCnt >> 1) + (bDropCnt & 1)) : FTW_VOID_NOP;
-                C4_SYMM ? (bPopCnt = (bPopCnt >> 1) + (bPopCnt & 1)) : FTW_VOID_NOP;
+                C4_SYMM ? (bDropCnt = (bDropCnt >> 1) + (bDropCnt & 1)) : 0;
+                C4_SYMM ? (bPopCnt = (bPopCnt >> 1) + (bPopCnt & 1)) : 0;
 
                 for (i = 0; i < bDropCnt; i++)
                 {
@@ -409,7 +410,7 @@ static inline void Interface_Connect4_oracle(Connect4 *const restrict _c4, const
                 uint8_t bArr[MOVE_BOUNDS], bCnt = 0;
 
                 Connect4_original_genMoveBody(Connect4_dropMask(bC4->mask, BOT_MASK, ALL_MASK), bArr, &bCnt);
-                Connect4_symmetric(bC4) ? (bCnt = (bCnt >> 1) + (bCnt & 1)) : FTW_VOID_NOP;
+                Connect4_symmetric(bC4) ? (bCnt = (bCnt >> 1) + (bCnt & 1)) : 0;
 
                 for (uint8_t i = 0; i < bCnt; i++)
                 {
@@ -468,7 +469,7 @@ void Interface_Connect4_perft(PerftStat *const restrict _stats, Connect4 *const 
     {
         _stats->nodes += moveCnt;
         _stats->drops += stdc_count_ones_ull(Connect4_dropMask(_c4->mask, BOT_MASK, ALL_MASK));
-        C4_variant == CONNECT4_POPOUT ? _stats->pops += stdc_count_ones_ull(Connect4_popMask(_c4->side)) : FTW_VOID_NOP;
+        C4_variant == CONNECT4_POPOUT ? _stats->pops += stdc_count_ones_ull(Connect4_popMask(_c4->side)) : 0;
 
         return;
     }
@@ -480,7 +481,16 @@ void Interface_Connect4_perft(PerftStat *const restrict _stats, Connect4 *const 
         MOVE_IDX < COLS ? _stats->drops++ : _stats->pops++;
 
         Connect4_play(_c4, MOVE_IDX);
-        !Connect4_over(_c4) ? Interface_Connect4_perft(_stats, _c4, _D - 1) : _stats->nodes++;
+
+        if (Connect4_over(_c4))
+        {
+            _stats->nodes++;
+        }
+        else
+        {
+            Interface_Connect4_perft(_stats, _c4, _D - 1);
+        }
+
         Connect4_unplay(_c4);
     }
 }
@@ -515,7 +525,16 @@ void Interface_Connect4_pop10_perft(PerftStat *const restrict _stats, Connect4 *
         (moveIdx = moveArr[i]) < COLS ? _stats->drops++ : (moveIdx == POP10_PASS ? _stats->passes++ : _stats->pops++);
 
         Connect4_pop10_play(_c4, _p10, moveIdx);
-        !Connect4_pop10_over(_p10) ? Interface_Connect4_pop10_perft(_stats, _c4, _p10, _D - 1) : _stats->nodes++;
+
+        if (Connect4_pop10_over(_p10))
+        {
+            _stats->nodes++;
+        }
+        else
+        {
+            Interface_Connect4_pop10_perft(_stats, _c4, _p10, _D - 1);
+        }
+
         Connect4_pop10_unplay(_c4, _p10);
     }
 }
@@ -540,13 +559,13 @@ void Interface_Make7_perft(PerftStat *const restrict _stats, const Make7 *const 
         const uint8_t PERFT_M7_DROP_CNT = stdc_count_ones_ull(PERFT_M7_DROP_MASK);
         const uint8_t PERFT_M7_OFFS[3] = Make7_offTileCounts(_M7);
 
-        PERFT_M7_OFFS[0] ? _stats->tile1s += PERFT_M7_DROP_CNT : FTW_VOID_NOP;
-        PERFT_M7_OFFS[1] ? _stats->tile2s += PERFT_M7_DROP_CNT : FTW_VOID_NOP;
+        PERFT_M7_OFFS[0] ? _stats->tile1s += PERFT_M7_DROP_CNT : 0;
+        PERFT_M7_OFFS[1] ? _stats->tile2s += PERFT_M7_DROP_CNT : 0;
 
         const uint64_t PERFT_M7_THREES_MASK = PERFT_M7_DROP_MASK & MAKE7_THREES_MASK;
         const uint8_t PERFT_M7_THREES_CNT = stdc_count_ones_ull(PERFT_M7_THREES_MASK);
 
-        PERFT_M7_OFFS[2] && PERFT_M7_THREES_MASK ? _stats->tile3s += PERFT_M7_THREES_CNT : FTW_VOID_NOP;
+        PERFT_M7_OFFS[2] && PERFT_M7_THREES_MASK ? _stats->tile3s += PERFT_M7_THREES_CNT : 0;
 
         return;
     }
@@ -574,7 +593,15 @@ void Interface_Make7_perft(PerftStat *const restrict _stats, const Make7 *const 
         Make7 perftM7 = *_M7;
 
         Make7_drop(&perftM7, MOVE_TILE, moveIdx & 7);
-        !Make7_over(&perftM7) ? Interface_Make7_perft(_stats, &perftM7, _D - 1) : _stats->nodes++;
+
+        if (Make7_over(&perftM7))
+        {
+            _stats->nodes++;
+        }
+        else
+        {
+            Interface_Make7_perft(_stats, &perftM7, _D - 1);
+        }
     }
 }
 
@@ -634,12 +661,12 @@ static inline void Interface_run(void)
     TransTable_init(&NS_table, UI_ttSize * UI_ttMulti);
     HashRing_reset();
 
-    UI_ttNotReady ? printf(FTW_STR_TRANSTABLE, NS_table.size), UI_ttNotReady = false : FTW_VOID_NOP;
+    UI_ttNotReady ? printf(FTW_STR_TRANSTABLE, NS_table.size), UI_ttNotReady = false : 0;
 
     if (UI_IS_MAKE7)
     {
         M7_targetMode = true;
-        UI_c4NotReady ? puts(FTW_STR_MAKE7_RULESET), UI_c4NotReady = false : FTW_VOID_NOP;
+        UI_c4NotReady ? puts(FTW_STR_MAKE7_RULESET), UI_c4NotReady = false : 0;
         Make7_setTargetMode();
         printf(FTW_STR_WIN_MODE, M7_targetMode ? FTW_STR_WINDOW : FTW_STR_EXACT);
         Make7_init(&UI_m7);
@@ -655,11 +682,11 @@ static inline void Interface_run(void)
 
         Connect4_prepare(UI_cols, UI_rows);
         Connect4_init(&UI_c4);
-        UI_IS_POP10 ? Connect4_pop10_reset(&UI_c4, &UI_p10) : FTW_VOID_NOP;
+        UI_IS_POP10 ? Connect4_pop10_reset(&UI_c4, &UI_p10) : (void)(0);
         Connect4_funcPtrs_init();
         Connect4_globals_init();
         Connect4_print(&UI_c4, Interface_Connect4_turn(UI_c4.plies, UI_p10.turn));
-        UI_IS_POP10 ? Connect4_pop10_print(&UI_p10) : FTW_VOID_NOP;
+        UI_IS_POP10 ? Connect4_pop10_print(&UI_p10) : (void)(0);
 
         HashRing_push(Connect4_canonicalize(Connect4_key(&UI_c4)));
         PathTable_init(&NS_path, UI_PATH_SIZE);
@@ -680,7 +707,7 @@ static inline void Interface_run(void)
 
     UI_IS_MAKE7 ? sprintf(dbName, "%s.db", FTW_STR_VARIANTS[C4_variant]) : sprintf(dbName, "%ux%u_%s.db", COLS, ROWS, FTW_STR_VARIANTS[C4_variant]);
     SQLite_open(&database, dbName);
-    UI_IS_POP10 ? SQLite_delete(database) : FTW_VOID_NOP;
+    UI_IS_POP10 ? SQLite_delete(database) : (void)(0);
 #else
     ResultRing_reset();
 #endif
@@ -730,11 +757,11 @@ static inline void Interface_run(void)
 
         if (UI_IS_MAKE7)
         {
-            Make7_moves(&UI_m7) & 1 ? printf("\e[93m" FTW_STR_P2_PROMPT "\e[0m") : printf("\e[92m" FTW_STR_P1_PROMPT "\e[0m");
+            Make7_moves(&UI_m7) & 1 ? printf("\x1b[93m" FTW_STR_P2_PROMPT "\x1b[0m") : printf("\x1b[92m" FTW_STR_P1_PROMPT "\x1b[0m");
         }
         else
         {
-            Interface_Connect4_turn(UI_c4.plies, UI_p10.turn) ? printf("\e[91m" FTW_STR_P2_PROMPT "\e[0m") : printf("\e[93m" FTW_STR_P1_PROMPT "\e[0m");
+            Interface_Connect4_turn(UI_c4.plies, UI_p10.turn) ? printf("\x1b[91m" FTW_STR_P2_PROMPT "\x1b[0m") : printf("\x1b[93m" FTW_STR_P1_PROMPT "\x1b[0m");
         }
 
         fflush(stdout);
@@ -778,7 +805,7 @@ static inline void Interface_run(void)
             else
             {
                 Connect4_moves(&UI_c4);
-                UI_c4.plies ? putchar('\n') : FTW_VOID_NOP;
+                UI_c4.plies ? putchar('\n') : 0;
             }
         }
         else if (Interface_findLongCmd(cmd, "emoji"))
@@ -791,7 +818,7 @@ static inline void Interface_run(void)
             {
                 g_emoji = !g_emoji;
                 Connect4_print(&UI_c4, Interface_Connect4_turn(UI_c4.plies, UI_p10.turn));
-                UI_IS_POP10 ? Connect4_pop10_print(&UI_p10) : FTW_VOID_NOP;
+                UI_IS_POP10 ? Connect4_pop10_print(&UI_p10) : (void)(0);
             }
         }
         else if (Interface_findShortCmd(cmd, 's', "solve"))
@@ -936,7 +963,7 @@ static inline void Interface_run(void)
             else
             {
                 Connect4_print(&UI_c4, Interface_Connect4_turn(UI_c4.plies, UI_p10.turn));
-                UI_IS_POP10 ? Connect4_pop10_print(&UI_p10) : FTW_VOID_NOP;
+                UI_IS_POP10 ? Connect4_pop10_print(&UI_p10) : (void)(0);
 
                 HashRing_reset();
                 HashRing_push(Connect4_canonicalize(Connect4_key(&UI_c4)));
@@ -961,7 +988,7 @@ static inline void Interface_run(void)
             {
                 UI_IS_POP10 ? Connect4_pop10_unplay(&UI_c4, &UI_p10) : Connect4_unplay(&UI_c4);
                 Connect4_print(&UI_c4, Interface_Connect4_turn(UI_c4.plies, UI_p10.turn));
-                UI_IS_POP10 ? Connect4_pop10_print(&UI_p10) : FTW_VOID_NOP;
+                UI_IS_POP10 ? Connect4_pop10_print(&UI_p10) : (void)(0);
                 HashRing_pop();
             }
 
@@ -1056,8 +1083,8 @@ static inline void Interface_run(void)
                 }
 
                 UI_IS_MAKE7 ? Make7_print(&UI_m7) : Connect4_print(&UI_c4, Interface_Connect4_turn(UI_c4.plies, UI_p10.turn));
-                UI_IS_POP10 ? Connect4_pop10_print(&UI_p10) : FTW_VOID_NOP;
-                !UI_IS_MAKE7 ? HashRing_push(Connect4_canonicalize(Connect4_key(&UI_c4))) : FTW_VOID_NOP;
+                UI_IS_POP10 ? Connect4_pop10_print(&UI_p10) : (void)(0);
+                !UI_IS_MAKE7 ? HashRing_push(Connect4_canonicalize(Connect4_key(&UI_c4))) : (void)(0);
 
                 printf("Calculated move: %c%c\n", UI_IS_MAKE7 ? m7MovChr[0] : bestMove, UI_IS_MAKE7 * m7MovChr[1]);
                 putchar('\a');
@@ -1263,11 +1290,11 @@ static inline void Interface_run(void)
                 case WIN_CHAR:
                 case LOSS_CHAR:
                     dbRes = (Result) { .wdl = dbChar };
-                    ++arg && isdigit(*arg) ? dbRes.dtw = strtoll(arg, nullptr, 10), inserted = true : FTW_VOID_NOP;
+                    ++arg && isdigit(*arg) ? dbRes.dtw = strtoll(arg, nullptr, 10), inserted = true : 0;
                     break;
                 case DRAW_CHAR:
                     dbRes = (Result) { .wdl = dbChar, .dtw = 0 };
-                    ++arg && (isblank(*arg) || !*arg) ? inserted = true : FTW_VOID_NOP;
+                    ++arg && (isblank(*arg) || !*arg) ? inserted = true : 0;
                 default:
                     break;
                 }
@@ -1356,6 +1383,18 @@ static inline void Interface_run(void)
 
             solved = false;
         }
+        else if (UI_IS_POP10 && REC_strcmd(cmd, "seed"))
+        {
+            C4_pop10NotReady = true;
+
+            Connect4_reset(&UI_c4);
+            Connect4_pop10_reset(&UI_c4, &UI_p10);
+            Connect4_print(&UI_c4, UI_p10.turn);
+            Connect4_pop10_print(&UI_p10);
+
+            HashRing_reset();
+            HashRing_push(Connect4_canonicalize(Connect4_key(&UI_c4)));
+        }
         else if (isdigit(*cmd) || (UI_IS_POPOUT_OR_POP10 && strpbrk(cmd, popTokens)))
         {
             if (winner == -1)
@@ -1402,7 +1441,7 @@ static inline void Interface_run(void)
                     }
 
                     Connect4_print(&UI_c4, Interface_Connect4_turn(UI_c4.plies, UI_p10.turn));
-                    UI_IS_POP10 ? Connect4_pop10_print(&UI_p10) : FTW_VOID_NOP;
+                    UI_IS_POP10 ? Connect4_pop10_print(&UI_p10) : (void)(0);
                 }
 
                 solved = false;

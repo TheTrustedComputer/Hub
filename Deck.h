@@ -18,16 +18,20 @@
     #include "Card.h"
 #endif
 
+#ifndef SPLITMIX_H
+    #include "SplitMix.h"
+#endif
+
 #ifndef XOSHIRO_H
     #include "Xoshiro.h"
 #endif
 
-constexpr uint8_t DECK_TCNT = 57; // 52 cards + 5 jokers
-constexpr uint8_t DECK_DCNT = 52; // After drawing 5 cards
+static constexpr uint8_t DECK_TOTAL_COUNT = 57; // 52 cards + 5 jokers
+static constexpr uint8_t DECK_DRAW_COUNT = 52; // After drawing 5 cards
 
 typedef struct
 {
-    Card cards[DECK_TCNT];
+    Card cards[DECK_TOTAL_COUNT];
     uint8_t count;
 }
 Deck;

@@ -81,7 +81,7 @@ void *REC_malloc(const size_t _SIZE, const char *const restrict _MSG, const bool
         {
             if (_MSG)
             {
-                fprintf(stderr, "\e[1mRECSIO Error: %s\e[0m\n", _MSG);
+                fprintf(stderr, "\x1b[1mRECSIO Error: %s\x1b[0m\n", _MSG);
             }
 
             if (_FATAL)
@@ -114,7 +114,7 @@ void *REC_calloc(const size_t _BLKS, const size_t _SIZE, const char *const restr
         {
             if (_MSG)
             {
-                fprintf(stderr, "\e[1mRECSIO Error: %s\e[0m\n", _MSG);
+                fprintf(stderr, "\x1b[1mRECSIO Error: %s\x1b[0m\n", _MSG);
             }
 
             if (_FATAL)
@@ -151,7 +151,7 @@ void *REC_realloc_mem(void *restrict *const restrict _mem, const size_t _SIZE)
         }
         else
         {
-            fprintf(stderr, "\e[1mRECSIO Warning: realloc() returned NULL pointer; the original pointer is still valid.\e[0m\n");
+            fprintf(stderr, "\x1b[1mRECSIO Warning: realloc() returned NULL pointer; the original pointer is still valid.\x1b[0m\n");
         }
 
         return newMem;
@@ -250,7 +250,7 @@ FILE *REC_fopen(const char *const restrict _NAME, const char *const restrict _MO
 
     if (!STREAM)
     {
-        fprintf(stderr, "\e[1mRECSIO Error: Could not open the file \"%s\".\e[0m\n", _NAME);
+        fprintf(stderr, "\x1b[1mRECSIO Error: Could not open the file \"%s\".\x1b[0m\n", _NAME);
     }
 
     return STREAM;
@@ -267,7 +267,7 @@ int REC_fclose(FILE *const restrict _stream)
 
     if (STATUS == EOF)
     {
-        fprintf(stderr, "\e[1mRECSIO Error: Could not close the file stream.\e[0m\n");
+        fprintf(stderr, "\x1b[1mRECSIO Error: Could not close the file stream.\x1b[0m\n");
     }
 
     return STATUS;
@@ -417,7 +417,7 @@ int REC_thrd_create(thrd_t *restrict _thr, thrd_start_t _func, void *const restr
         {
             if (_MSG)
             {
-                fprintf(stderr, "\e[1mRECSIO Error: %s\e[0m\n", _MSG);
+                fprintf(stderr, "\x1b[1mRECSIO Error: %s\x1b[0m\n", _MSG);
             }
 
             if (_FATAL)
@@ -448,7 +448,7 @@ int REC_thrd_join(thrd_t _thr, int *_res, const char *const restrict _MSG, const
     {
         if (_MSG)
         {
-            fprintf(stderr, "\e[1mRECSIO Error: %s\e[0m\n", _MSG);
+            fprintf(stderr, "\x1b[1mRECSIO Error: %s\x1b[0m\n", _MSG);
         }
 
         if (_FATAL)
@@ -478,7 +478,7 @@ int REC_mtx_init(mtx_t *restrict _mtx, const int _TYPE, const char *const restri
         {
             if (_MSG)
             {
-                fprintf(stderr, "\e[1mRECSIO Error: %s\e[0m\n", _MSG);
+                fprintf(stderr, "\x1b[1mRECSIO Error: %s\x1b[0m\n", _MSG);
             }
 
             if (_FATAL)
@@ -511,7 +511,7 @@ int REC_cnd_init(cnd_t *restrict _cnd, const char *const restrict _MSG, const bo
         case thrd_error:
             if (_MSG)
             {
-                fprintf(stderr, "\e[1mRECSIO Error: %s\e[0m\n", _MSG);
+                fprintf(stderr, "\x1b[1mRECSIO Error: %s\x1b[0m\n", _MSG);
             }
             if (_FATAL)
             {
@@ -519,7 +519,7 @@ int REC_cnd_init(cnd_t *restrict _cnd, const char *const restrict _MSG, const bo
             }
             break;
         case thrd_nomem:
-            fprintf(stderr, "\e[1mRECSIO Error: Insufficient memory to initialize a condition variable.\e[0m\n");
+            fprintf(stderr, "\x1b[1mRECSIO Error: Insufficient memory to initialize a condition variable.\x1b[0m\n");
             [[fallthrough]];
         case thrd_success:
             break;

@@ -49,36 +49,36 @@ static inline void Result_print(const Result _RESULT, const Result *const restri
     switch (_RESULT.wdl)
     {
     default:
-        printf("\e[2m__\e[0m");
+        printf("\x1b[2m__\x1b[0m");
         break;
     case DRAW_CHAR:
         if (_BEST_R && _BEST_R->wdl == _RESULT.wdl)
         {
-            _DRAW_D ? printf("\e[1;93m%c\e[0m", _RESULT.wdl) : printf("\e[1;93m%s\e[0m", FTW_STR_DRAW);
+            _DRAW_D ? printf("\x1b[1;93m%c\x1b[0m", _RESULT.wdl) : printf("\x1b[1;93m%s\x1b[0m", FTW_STR_DRAW);
         }
         else
         {
-            _DRAW_D ? printf("\e[0;33m%c\e[0m", _RESULT.wdl) : printf("\e[0;33m%s\e[0m", FTW_STR_DRAW);
+            _DRAW_D ? printf("\x1b[0;33m%c\x1b[0m", _RESULT.wdl) : printf("\x1b[0;33m%s\x1b[0m", FTW_STR_DRAW);
         }
         break;
     case WIN_CHAR:
         if (_BEST_R && _BEST_R->wdl == _RESULT.wdl && _BEST_R->dtw == _RESULT.dtw)
         {
-            _RESULT.dtw ? printf("\e[1;92m%c%u\e[0m", _RESULT.wdl, _RESULT.dtw) : printf("\e[1;92m%s\e[0m", FTW_STR_WIN);
+            _RESULT.dtw ? printf("\x1b[1;92m%c%u\x1b[0m", _RESULT.wdl, _RESULT.dtw) : printf("\x1b[1;92m%s\x1b[0m", FTW_STR_WIN);
         }
         else
         {
-            _RESULT.dtw ? printf("\e[0;32m%c%u\e[0m", _RESULT.wdl, _RESULT.dtw) : printf("\e[0;32m%s\e[0m", FTW_STR_WIN);
+            _RESULT.dtw ? printf("\x1b[0;32m%c%u\x1b[0m", _RESULT.wdl, _RESULT.dtw) : printf("\x1b[0;32m%s\x1b[0m", FTW_STR_WIN);
         }
         break;
     case LOSS_CHAR:
         if (_BEST_R && _BEST_R->wdl == _RESULT.wdl && _BEST_R->dtw == _RESULT.dtw)
         {
-            _RESULT.dtw ? printf("\e[1;91m%c%u\e[0m", _RESULT.wdl, _RESULT.dtw) : printf("\e[1;91m%s\e[0m", FTW_STR_LOSS);
+            _RESULT.dtw ? printf("\x1b[1;91m%c%u\x1b[0m", _RESULT.wdl, _RESULT.dtw) : printf("\x1b[1;91m%s\x1b[0m", FTW_STR_LOSS);
         }
         else
         {
-            _RESULT.dtw ? printf("\e[0;31m%c%u\e[0m", _RESULT.wdl, _RESULT.dtw) : printf("\e[0;31m%s\e[0m", FTW_STR_LOSS);
+            _RESULT.dtw ? printf("\x1b[0;31m%c%u\x1b[0m", _RESULT.wdl, _RESULT.dtw) : printf("\x1b[0;31m%s\x1b[0m", FTW_STR_LOSS);
         }
         break;
 

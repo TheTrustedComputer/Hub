@@ -31,14 +31,19 @@ FTW's goal is to analyze, prove, and visualize the outcomes of Connect 4 and its
 ### Requirements
 
 - A C23 compiler (GCC 14+, Clang 18+).
-    - Clang is the recommended compiler for any computationally intensive tasks.
-    - GCC is acceptable; performance differs by processor, workload, and scheduler noise.
-    - PGO can improve throughput by an additional 5%; Make 7 greatly benefits from this increase.
-    - Building with other compilers is at your own risk; we only support GCC and Clang.
-- A glibc installation.
-    - Linking against different C libraries (musl) may or may not succeed due to missing implementations of certain language features.
+    - Clang is the recommended compiler for computationally intensive tasks.
+    - GCC is supported; performance differs by processor, workload, and scheduler noise.
+    - PGO can improve throughput by an additional 5%; Make 7 greatly benefits from it.
+    - Building with other compilers is at your own risk; be prepared for unexpected breakages.
+- A C library with math functions, e.g., `libm.so`.
+    - Glibc ships it and is strongly encouraged, but musl can work.
+    - Linking against different C libraries may not succeed due to missing language features.
 - Minimal example:
     - ```clang -std=c23 -lm FourTheWin.c```
+
+### Makefile
+
+Install [GNU Make](https://www.gnu.org/software/make) if you do not have it. See the section on optional dependencies for details. Then, run `make release` to build the executable.
 
 ### Optional Dependencies
 
@@ -48,8 +53,15 @@ Before downloading dependencies from their respective websites, consider checkin
 - [fastmod](https://github.com/lemire/fastmod)
 - [xxhash](https://xxhash.com)
 - [SQLite](https://sqlite.org)
-- [GNU Make](https://www.gnu.org/software/make)
+
+## Windows Build Instructions
+
+Download and install [MSYS2](https://www.msys2.org), and follow the Linux build instructions.
 
 ## Contributing
 
-We welcome pull requests. If you have a suggestion for enhancing FTW, please submit it for review. Be sure to document your changes and briefly explain your reasoning. We do not mind if you use AI assistance, but please verify your work for inconsistencies. Discrepancies between your code and your description from AI slop will cause unnecessary delays.
+We welcome pull requests. If you have a suggestion for enhancing FTW, please submit it for review. Be sure to document your changes and briefly explain your reasoning. We do not mind AI assistance, but please verify your work for inconsistencies. Discrepancies between your code and your description from AI slop will cause unnecessary delays.
+
+## Language Notes
+
+FTW is not ISO C-compliant. It uses compiler extensions and features that are not part of the target language standard.

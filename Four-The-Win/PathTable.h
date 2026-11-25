@@ -141,7 +141,7 @@ static inline PathEntry *PathTable_probe(const PathTable *const restrict _PT, co
 
     while (pe->key && pe->key != _KEY)
     {
-        ++pe == &_PT->entry[_PT->size] ? (pe = &_PT->entry[0]) : FTW_VOID_NOP; // end of table
+        ++pe == &_PT->entry[_PT->size] ? (pe = &_PT->entry[0]) : 0; // end of table
     }
 
     return pe;
@@ -150,11 +150,20 @@ static inline PathEntry *PathTable_probe(const PathTable *const restrict _PT, co
 ////////////////////////////////////////////////////
 /// @brief  Initializes the path table with a size.
 /// @param  _pt
-/// @param  _SIZE
+/// @param  _size
 ////////////////////////////////////////////////////
-static inline void PathTable_init(PathTable *const restrict _pt, const size_t _SIZE)
+static inline void PathTable_init(PathTable *const restrict _pt, size_t _size)
 {
-    _pt->entry = REC_calloc((_pt->size = TransTable_size(_SIZE)), sizeof(*_pt->entry), "Could not allocate memory for the path table.", true);
+    void *restrict pathMem;
+
+    do
+    {
+        pathMem = REC_calloc((_pt->size = TransTable_size(_size)), sizeof(*_pt->entry), "Could not allocate memory for the path table; decreasing size.", false);
+        _size >>= 1;
+    }
+    while (!pathMem);
+
+    _pt->entry = pathMem;
 
 #ifdef FTW_FASTMOD
     fastmod_PathTable_size = computeM_u64(_pt->size);
@@ -202,7 +211,7 @@ static inline void PathStack_destroy(PathStack *const restrict _ps)
 ////////////////////////////////////////////
 static inline void PathStack_push(PathStack *const restrict _ps, const Board _KEY)
 {
-    ++_ps->top == _ps->cap ? (_ps->data = realloc(_ps->data, (_ps->cap <<= 1) * sizeof(*_ps->data))) : FTW_VOID_NOP;
+    ++_ps->top == _ps->cap ? (_ps->data = realloc(_ps->data, (_ps->cap <<= 1) * sizeof(*_ps->data))) : 0;
     _ps->data[_ps->top] = _KEY;
 }
 
@@ -216,6 +225,7 @@ static inline void PathStack_pop(PathStack *const restrict _ps)
     _ps->top--;
 }
 
+/*
 ///////////////////////////////////////////////////////
 /// @brief  Resets the path graph by zeroing its size.
 /// @param  _pg
@@ -275,14 +285,14 @@ static inline void PathGraph_destroy(PathGraph *const restrict _pg)
 /// @param  _pe
 /// @param  _LOCK
 /////////////////////////////////////////////////////
-/*static inline uint16_t PathGraph_getNode(PathGraph *const restrict _pg, PathEntry *const restrict _pe, const TTLock _LOCK)
+static inline uint16_t PathGraph_getNode(PathGraph *const restrict _pg, PathEntry *const restrict _pe, const TTLock _LOCK)
 {
     if (_pg->searchId == _pe->searchId && _pg->node)
     {
         return _pe->nodeId - 1;
     }
 
-    _pg->size == _pg->cap ? (_pg->node = realloc(_pg->node, (_pg->cap <<= 1) * sizeof(*_pg->node))) : FTW_VOID_NOP;
+    _pg->size == _pg->cap ? (_pg->node = realloc(_pg->node, (_pg->cap <<= 1) * sizeof(*_pg->node))) : 0;
 
     const uint16_t IDX = _pg->size++;
 
@@ -298,7 +308,7 @@ static inline void PathGraph_destroy(PathGraph *const restrict _pg)
     _pe->searchId = _pg->searchId;
 
     return IDX;
-}*/
+}
 
 ////////////////////////////////////////////
 /// @brief  Adds an edge to the path graph.
@@ -308,16 +318,16 @@ static inline void PathGraph_destroy(PathGraph *const restrict _pg)
 /// @param  _U_KEY  The "from" key.
 /// @param  _LOCK   The "to" lock.
 ////////////////////////////////////////////
-/*static inline void PathGraph_addEdge(PathGraph *const restrict _pg, const PathTable *const restrict _PT, PathEntry *const restrict _pe, const Board _U_KEY, const TTLock _LOCK)
+static inline void PathGraph_addEdge(PathGraph *const restrict _pg, const PathTable *const restrict _PT, PathEntry *const restrict _pe, const Board _U_KEY, const TTLock _LOCK)
 {
     const uint16_t U = PathGraph_getNode(_pg, PathTable_probe(_PT, _U_KEY), _LOCK);
     const uint16_t V = PathGraph_getNode(_pg, _pe, _LOCK);
 
     PathNode *const restrict pn = &_pg->node[U];
 
-    pn->size == pn->cap ? (pn->succ = realloc(pn->succ, (pn->cap = pn->cap ? pn->cap << 1 : 1) * sizeof(*pn->succ))) : FTW_VOID_NOP;
+    pn->size == pn->cap ? (pn->succ = realloc(pn->succ, (pn->cap = pn->cap ? pn->cap << 1 : 1) * sizeof(*pn->succ))) : 0;
     pn->succ[pn->size++] = V;
-}*/
+}
 
 ////////////////////////////////////////////////////////////
 /// @brief  Initializes Tarjan's algorithm data structures.
@@ -368,8 +378,8 @@ static inline void PathTarjan_findSCCs(PathTarjan *const restrict _pj, const Tra
     for (i = 0; i < sccNode->size; i++)
     {
         w = sccNode->succ[i];
-        !_pj->idx[w] ? PathTarjan_findSCCs(_pj, _TT, w) : FTW_VOID_NOP;
-        _pj->onStk[w] && _pj->low[w] < _pj->low[_V] ? (_pj->low[_V] = _pj->low[w]) : FTW_VOID_NOP;
+        !_pj->idx[w] ? PathTarjan_findSCCs(_pj, _TT, w) : (void)(0);
+        _pj->onStk[w] && _pj->low[w] < _pj->low[_V] ? (_pj->low[_V] = _pj->low[w]) : 0;
     }
 
     if (_pj->low[_V] == _pj->idx[_V])
@@ -381,7 +391,7 @@ static inline void PathTarjan_findSCCs(PathTarjan *const restrict _pj, const Tra
         {
             w = _pj->stk[--_pj->top];
             _pj->onStk[w] = false;
-            compCnt == compCap ? (sccIds = realloc(sccIds, (compCap = compCap ? compCap << 1 : 1) * sizeof(*sccIds))) : FTW_VOID_NOP;
+            compCnt == compCap ? (sccIds = realloc(sccIds, (compCap = compCap ? compCap << 1 : 1) * sizeof(*sccIds))) : 0;
             sccIds[compCnt++] = w;
         }
         while (w != _V);
@@ -453,10 +463,10 @@ static inline void PathGraph_Tarjan(PathGraph *const restrict _pg, TransTable *c
 
     for (uint16_t i = 0; i < _pg->size; i++)
     {
-        !tarjan.idx[i] ? PathTarjan_findSCCs(&tarjan, _tt, i) : FTW_VOID_NOP;
+        !tarjan.idx[i] ? PathTarjan_findSCCs(&tarjan, _tt, i) : (void)(0);
     }
 
     PathTarjan_destroy(&tarjan);
-}
+}*/
 
 #endif // PATHTABLE_H //

@@ -137,7 +137,7 @@ void Card_print(const Card _C)
     const Suit SUIT = Card_suit(_C);
     const Rank RANK = Card_rank(_C);
 
-    printf("\e[7;1;"); // Invert and bold
+    printf("\x1b[7;1;"); // Invert and bold
 
     if (RANK == JOKER)
     {
@@ -198,7 +198,7 @@ void Card_print(const Card _C)
         }
     }
 
-    printf("\e[0m");
+    printf("\x1b[0m");
 }
 
 #endif // CARD_H //

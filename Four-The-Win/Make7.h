@@ -275,7 +275,7 @@ static inline void Make7_drop(Make7 *const restrict _m7, const uint8_t _TILE, co
 {
     const uint64_t DROPPER = MAKE7_COL_MASK << MAKE7_SIZE_P1 * _COL & (_m7->mask + MAKE7_BOT);
 
-    !_TILE ? _m7->tile1 |= DROPPER : _TILE <= 1 ? _m7->tile2 |= DROPPER : FTW_VOID_NOP;
+    !_TILE ? _m7->tile1 |= DROPPER : _TILE <= 1 ? _m7->tile2 |= DROPPER : 0;
     _m7->side ^= _m7->mask;
     _m7->mask |= DROPPER;
     _m7->lastT = DROPPER;

@@ -19,7 +19,7 @@ void FourTheWin_C4_prepare(void)
 void FourTheWin_C4_init(void)
 {
     Connect4_init(&UI_c4);
-    C4_variant == CONNECT4_POP10 ? Connect4_pop10_reset(&UI_c4, &UI_p10) : FTW_VOID_NOP;
+    C4_variant == CONNECT4_POP10 ? Connect4_pop10_reset(&UI_c4, &UI_p10) : (void)(0);
     Connect4_funcPtrs_init();
     Connect4_globals_init();
 }
@@ -49,7 +49,7 @@ bool FourTheWin_C4_play(const char *restrict _str)
 
 void FourTheWin_C4_undo(void)
 {
-    UI_c4.plies ? Connect4_unplay(&UI_c4) : FTW_VOID_NOP;
+    UI_c4.plies ? Connect4_unplay(&UI_c4) : (void)(0);
 }
 
 Board FourTheWin_C4_playerMask(void)

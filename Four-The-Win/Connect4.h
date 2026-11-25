@@ -231,7 +231,7 @@ static inline void Connect4_prepare(uint8_t _cols, uint8_t _rows)
     }
     else if (_cols > 16)
     {
-        fprintf(stderr, "\e[1m%s: The board size must not exceed 16 columns.\e[0m\n", FTW_STR_ERROR_PREFIX);
+        fprintf(stderr, "\x1b[1m%s: The board size must not exceed 16 columns.\x1b[0m\n", FTW_STR_ERROR_PREFIX);
 
         return;
     }
@@ -243,7 +243,7 @@ static inline void Connect4_prepare(uint8_t _cols, uint8_t _rows)
 
     if (_cols * (_rows + 1) > FTW_C4_MAX_BITS)
     {
-        fprintf(stderr, "\e[1m%s: The board size is too large for %u bits.\e[0m\n", FTW_STR_ERROR_PREFIX, FTW_C4_MAX_BITS);
+        fprintf(stderr, "\x1b[1m%s: The board size is too large for %u bits.\x1b[0m\n", FTW_STR_ERROR_PREFIX, FTW_C4_MAX_BITS);
 
         return;
     }
@@ -287,11 +287,13 @@ static inline void Connect4_prepare(uint8_t _cols, uint8_t _rows)
     COL_MASK = ALL_COL_MASK >> 1;
     ALL_MASK ^= FULL_MASK;
 
-    if (C4_variant == CONNECT4_POPOUT || C4_variant == CONNECT4_POP10)
+    const bool C4_POP10 = C4_variant == CONNECT4_POP10;
+
+    if (C4_variant == CONNECT4_POPOUT || C4_POP10)
     {
         MOVE_BOUNDS = COLS_X2 - (COLS >> 2);
         MOVE_SPACE = COLS_X2;
-        C4_variant == CONNECT4_POP10 ? (POP10_PASS = MOVE_SPACE++) : FTW_VOID_NOP;
+        C4_POP10 ? (POP10_PASS = MOVE_SPACE++) : 0;
         PLY_LENGTH = UINT16_MAX;
         PLY_LENGTH_P1 = PLY_LENGTH + 1;
     }
@@ -498,8 +500,8 @@ static inline void Connect4_print(const Connect4 *const restrict _c4, const bool
                 g_emoji ? printf(FTW_C4_EMOJI_BLUE_CIRCLE) : printf(FTW_C4_ANSI_BLUE_CIRCLE);
             }
 
-            //!g_emoji ? (j % COLS == COLS_M1 ? printf("\e[0m") : printf(" ")) : FTW_VOID_NOP;
-            !g_emoji ? printf("\e[0m") : FTW_VOID_NOP;
+            //!g_emoji ? (j % COLS == COLS_M1 ? printf("\x1b[0m") : printf(" ")) : 0;
+            !g_emoji ? printf("\x1b[0m") : 0;
 
         }
 
@@ -727,7 +729,7 @@ static inline void Connect4_pop10_unpop(Connect4 *const restrict _c4, Connect4_P
 
     const uint8_t CONNECT_BIT = lastPop & ~POP10_4ROW;
 
-    (_p10->phase = CONNECT_BIT) ? (lastPop = CONNECT_BIT - COLS) : FTW_VOID_NOP;
+    (_p10->phase = CONNECT_BIT) ? (lastPop = CONNECT_BIT - COLS) : 0;
     _p10->pops -= 1 << (_p10->turn << 2);
 
     const Board COL_OFFSET = ROWS_P1 * lastPop;
@@ -1464,13 +1466,20 @@ static inline void Connect4_pop10_generate(const Connect4 *const restrict _C4, C
 
     if (_p10->phase)
     {
-        Connect4_pop10_passForced(_C4, _p10) ? _arr[(*_num)++] = POP10_PASS : Connect4_pop10_genMoveBodyOrder(_C4->side, Connect4_popMask(_C4->side), _arr, _num);
+        if (Connect4_pop10_passForced(_C4, _p10))
+        {
+            _arr[(*_num)++] = POP10_PASS;
+        }
+        else
+        {
+            Connect4_pop10_genMoveBodyOrder(_C4->side, Connect4_popMask(_C4->side), _arr, _num);
+        }
     }
     else
     {
         Board dropMask = Connect4_dropMask(_C4->mask, BOT_MASK, ALL_MASK);
 
-        Connect4_nonFullCols(_C4) > 1 ? dropMask &= ~(COL_MASK << (ROWS_P1 * (_C4->hist[_C4->plies - 1] - COLS))) : FTW_VOID_NOP;
+        Connect4_nonFullCols(_C4) > 1 ? dropMask &= ~(COL_MASK << (ROWS_P1 * (_C4->hist[_C4->plies - 1] - COLS))) : 0;
         Connect4_original_genMoveBody(dropMask, _arr, _num);
     }
 }
@@ -1512,12 +1521,12 @@ static inline void Connect4_original_genNonLosing(const Connect4 *const restrict
     Board forced = OP_THREATS & dropMask; *_num = 0;
 
 #if FTW_C4_MAX_BITS > 64 // cannot avoid losing; limit to 1 branch
-    Connect4_popcnt(forced) > 1 ? (forced &= -forced) : FTW_VOID_NOP;
+    Connect4_popcnt(forced) > 1 ? (forced &= -forced) : 0;
 #else
-    stdc_count_ones_ull(forced) > 1 ? (forced &= -forced) : FTW_VOID_NOP;
+    stdc_count_ones_ull(forced) > 1 ? (forced &= -forced) : 0;
 #endif
 
-    forced ? (dropMask = forced) : FTW_VOID_NOP;
+    forced ? (dropMask = forced) : 0;
 
     // Discard drops under opponent's threat (may become zero)
     const Board NEW_MASK = dropMask & ~((OP_THREATS & ALL_MASK) >> 1);

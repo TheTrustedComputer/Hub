@@ -6,17 +6,17 @@ CC_PROG ?= gcc
 CC_MING := x86_64-w64-mingw32-$(CC_PROG)
 CC_WRES := x86_64-w64-mingw32-windres
 CC_ARCH := -march=native # Redefine to target a different architecture
-CC_WARN := -Wall -Wextra
+CC_WARN := -Wall -Wextra -Wpedantic -Wshadow
 CC_OPTS = -O3 -pipe -flto -ffast-math -fno-trapping-math -fno-signed-zeros -fassociative-math -freciprocal-math -fsingle-precision-constant -fprefetch-loop-arrays -fno-stack-protector -fno-stack-check -fno-stack-clash-protection -fmerge-all-constants -fshort-enums -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections $(CC_ARCH) -s -w
 CC_DBUG = -Og -pipe -g -pg $(CC_ARCH) -DFTW_DEBUG
 CC_LIBS := -pthread -lm
 CC_ASAN := -fsanitize=address,undefined,leak
 CC_THRD := -fsanitize=thread
-CC_CSTD := -std=c23
+CC_CSTD := -std=c2y
 CC_EXTR = # Place extra compiler flags here, or append them to the `make` command
 
 FTW_BIN := FourTheWin
-FTW_WEB = $(CC_PROG) $(CC_OPTS) $(CC_CSTD) $(FTW_BIN).c -o Web/$(FTW_BIN) $(CC_LIBS) $(CC_EXTR)
+FTW_WEB = $(CC_PROG) $(CC_OPTS) $(CC_CSTD) $(FTW_BIN).c -o Web/$(FTW_BIN).js $(CC_LIBS) $(CC_EXTR)
 FTW_REL = $(CC_PROG) $(CC_OPTS) $(CC_CSTD) $(FTW_BIN).c -o Release/$(FTW_BIN) $(CC_LIBS) $(CC_EXTR)
 FTW_DBG = $(CC_PROG) $(CC_WARN) $(CC_DBUG) $(CC_CSTD) $(FTW_BIN).c -o Debug/$(FTW_BIN) $(CC_LIBS) $(CC_EXTR)
 FTW_WRD = $(shell getconf LONG_BIT) # Word size in bits
@@ -58,7 +58,7 @@ endif
 
 ifdef FTW_WEBASSEMBLY # Compile for the WebAssembly target instead of the host architecture
 	CC_PROG = emcc
-	FTW_BIN = FourTheWin.js
+	CC_EXTR += -DFTW_WEBASM
 	EMCC_RUNTIMES = '["cwrap"]'
 	EMCC_FUNCTIONS = '["_FourTheWin_C4_cols", \
 					   "_FourTheWin_C4_rows", \
@@ -80,27 +80,27 @@ ifdef FTW_WEBASSEMBLY # Compile for the WebAssembly target instead of the host a
 	endif
 
 	CC_ARCH =
-	CC_CSTD =
 else
 	ifdef FTW_SQLITE # Enable SQLite to cache previously computed solutions in the database
 		CC_EXTR += -DFTW_SQLITE -lsqlite3
 	endif
 endif
 
-release:
-	@mkdir -p Release
+.PHONY: clean
+
+build: release
+
+release: release-dir
 ifdef FTW_WEBASSEMBLY
 	$(FTW_WEB)
 else
 	$(FTW_REL)
 endif
 
-release-asan:
-	@mkdir -p Release
+release-asan:  release-dir
 	$(FTW_REL) $(CC_ASAN)
 
-release-pgo: clean
-	@mkdir -p Release
+release-pgo: clean release-dir
 ifeq ($(CC_PROG), gcc)
 	$(FTW_REL) -DFTW_PGO -fprofile-generate=$(FTW_BIN)_gccprof
 else ifeq ($(CC_PROG), clang)
@@ -119,13 +119,17 @@ endif
 #	perf2bolt -nl "$(FTW_BIN)" -p perf.data -o $(FTW_BIN)_perf.fdata
 #	llvm-bolt "$(FTW_BIN)" -o "$(FTW_BIN)_bolt" -reorder-blocks=ext-tsp -split-functions -split-all-cold -split-eh -dyno-stats
 
-debug:
-	@mkdir -p Debug
+release-dir:
+	@mkdir -p Release
+
+debug: debug-dir
 	$(FTW_DBG)
 
-debug-asan:
-	@mkdir -p Debug
+debug-asan: debug-dir
 	$(FTW_DBG) $(CC_ASAN)
 
+debug-dir:
+	@mkdir -p Debug
+
 clean:
-	rm -rf gmon.out perf.data *.fdata *_gccprof *_clangprof *.profdata *.gcda *.db*
+	@rm -rf gmon.out perf.data *.fdata *_gccprof *_clangprof *.profdata *.gcda *.db*

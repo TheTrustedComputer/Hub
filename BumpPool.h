@@ -111,7 +111,7 @@ int MemoryPool_init(MemoryPool *const restrict _pool)
 
     if (MemoryPool_improbable(_pool->size < MEMPOOL_HEADER_SIZE))
     {
-        fprintf(stderr, "\e[1mMEMORY POOL ERROR: The block size is too small.\e[0m\n");
+        fprintf(stderr, "\x1b[1mMEMORY POOL ERROR: The block size is too small.\x1b[0m\n");
         REC_free(_pool->baseAddr[_pool->chunks]);
         REC_free(_pool->baseAddr);
 
@@ -255,7 +255,7 @@ void MemoryPool_clear(MemoryPool *const restrict _pool)
 {
     for (size_t i = 0; i <= _pool->chunks; i++)
     {
-        memset(_pool->baseAddr[i] + MEMPOOL_HEADER_SIZE, 0, _pool->size - MEMPOOL_HEADER_SIZE);
+        memset((uint8_t*)(_pool->baseAddr[i]) + MEMPOOL_HEADER_SIZE, 0, _pool->size - MEMPOOL_HEADER_SIZE);
     }
 }
 

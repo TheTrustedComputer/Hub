@@ -174,7 +174,7 @@ static inline int16_t NegaScout_Connect4_original_search(Connect4 *const restric
     uint8_t movArr[MOVE_BOUNDS], movCnt, move = UINT8_MAX;
 
     Connect4_genNonLosing(_c4, movArr, &movCnt);
-    ttMov ? NegaScout_promote(movArr, movCnt, ~ttMov), NegaScout_History_sort(movArr, 1, movCnt - 1) : FTW_VOID_NOP;
+    ttMov ? NegaScout_promote(movArr, movCnt, ~ttMov), NegaScout_History_sort(movArr, 1, movCnt - 1) : (void)(0);
 
     const int16_t OLD_A = _a;
 
@@ -248,7 +248,7 @@ static inline int16_t NegaScout_Connect4_misere_search(Connect4 *const restrict 
     uint8_t movArr[MOVE_BOUNDS], movCnt, move = UINT8_MAX;
 
     Connect4_genNonLosing(_c4, movArr, &movCnt);
-    ttMov ? NegaScout_promote(movArr, movCnt, ~ttMov), NegaScout_History_sort(movArr, 1, movCnt - 1) : FTW_VOID_NOP;
+    ttMov ? NegaScout_promote(movArr, movCnt, ~ttMov), NegaScout_History_sort(movArr, 1, movCnt - 1) : (void)(0);
 
     const int16_t OLD_A = _a;
 
@@ -356,7 +356,7 @@ static inline int16_t NegaScout_Connect4_popout_search(Connect4 *const restrict 
     uint8_t movArr[MOVE_BOUNDS], movCnt, move = UINT8_MAX;
 
     Connect4_genNonLosing(_c4, movArr, &movCnt);
-    ttMov ? NegaScout_promote(movArr, movCnt, ~ttMov), NegaScout_History_sort(movArr, 1, movCnt - 1) : FTW_VOID_NOP;
+    ttMov ? NegaScout_promote(movArr, movCnt, ~ttMov), NegaScout_History_sort(movArr, 1, movCnt - 1) : (void)(0);
 
     const int16_t OLD_A = _a;
 
@@ -462,7 +462,7 @@ static inline int16_t NegaScout_Connect4_pop10_search(Connect4 *const restrict _
     uint8_t movArr[MOVE_BOUNDS], movCnt, move = UINT8_MAX;
 
     Connect4_pop10_generate(_c4, _p10, movArr, &movCnt);
-    ttMov ? NegaScout_promote(movArr, movCnt, ~ttMov), NegaScout_History_sort(movArr, 1, movCnt - 1) : FTW_VOID_NOP;
+    ttMov ? NegaScout_promote(movArr, movCnt, ~ttMov), NegaScout_History_sort(movArr, 1, movCnt - 1) : (void)(0);
 
     const int16_t OLD_A = _a;
     const bool OLD_TURN = _p10->turn;
@@ -555,7 +555,7 @@ static inline int16_t NegaScout_Make7_search(const Make7 *const restrict _M7, co
     uint8_t movArr[MAKE7_SIZE_X3], movCnt, move = UINT8_MAX;
 
     Make7_generate(_M7, movArr, &movCnt);
-    ttMov ? NegaScout_promote(movArr, movCnt, ~ttMov), NegaScout_History_sort(movArr, 1, movCnt - 1) : FTW_VOID_NOP;
+    ttMov ? NegaScout_promote(movArr, movCnt, ~ttMov), NegaScout_History_sort(movArr, 1, movCnt - 1) : (void)(0);
 
     const int16_t OLD_A = _a;
 
@@ -615,7 +615,7 @@ static inline Result NegaScout_Connect4_original_iterative(Connect4 *const restr
 
     for (i = 0; i <= DEPTH; i++)
     {
-        _PRINT ? printf(FTW_STR_SOLVING_FINITE, i, DEPTH), fflush(stdout) : FTW_VOID_NOP;
+        _PRINT ? printf(FTW_STR_SOLVING_FINITE, i, DEPTH), fflush(stdout) : 0;
 
         if (abs((val = NegaScout_Connect4_search(_c4, i, -NS_PROG, NS_PROG))) >= NS_WIN_THR)
         {
@@ -654,7 +654,7 @@ static inline Result NegaScout_Connect4_popout_iterative(Connect4 *const restric
 
     for (uint16_t i = 0; i <= DEPTH; i++)
     {
-        _PRINT ? printf(FTW_STR_SOLVING_INFINITE, i), fflush(stdout) : FTW_VOID_NOP;
+        _PRINT ? printf(FTW_STR_SOLVING_INFINITE, i), fflush(stdout) : 0;
 
         if (abs((val = NegaScout_Connect4_search(_c4, i, -NS_PROG, POP_WINDOW))) >= NS_WIN_THR)
         {
@@ -725,7 +725,7 @@ static inline Result NegaScout_Connect4_pop10_iterative(Connect4 *const restrict
 
     for (uint16_t i = 0; i <= DEPTH; i++)
     {
-        _PRINT ? printf(FTW_STR_SOLVING_INFINITE, i), fflush(stdout) : FTW_VOID_NOP;
+        _PRINT ? printf(FTW_STR_SOLVING_INFINITE, i), fflush(stdout) : 0;
 
         if (abs((val = NegaScout_Connect4_pop10_search(_c4, _p10, i, -NS_WIN_THR, NS_WIN_THR))) >= NS_WIN_THR)
         {
@@ -750,7 +750,7 @@ static inline Result NegaScout_Connect4_pop10_iterative(Connect4 *const restrict
         if (val == NS_DRAW)
         {
 #ifdef FTW_DEBUG
-            printf("Draw Fixed Point Count: 0x%X\n", drawFixedPoints);
+            //printf("Draw Fixed Point Count: 0x%X\n", drawFixedPoints);
 #endif
             if (++drawFixedPoints == TURN_BOUND)
             {
@@ -795,7 +795,7 @@ static inline Result NegaScout_Make7_iterative(const Make7 *const restrict _M7, 
 
     for (i = 0; i <= DEPTH; i++)
     {
-        _PRINT ? printf(FTW_STR_SOLVING_FINITE, i, DEPTH), fflush(stdout) : FTW_VOID_NOP;
+        _PRINT ? printf(FTW_STR_SOLVING_FINITE, i, DEPTH), fflush(stdout) : 0;
 
         if (abs((val = NegaScout_Make7_search(_M7, i, -NS_PROG, NS_PROG))) >= NS_WIN_THR)
         {
@@ -1571,7 +1571,7 @@ static inline void NegaScout_Connect4_PGO(void)
 
         Connect4_prepare(7, 6);
         Connect4_init(&profC4);
-        PGO_POP10 ? Connect4_pop10_reset(&profC4, &profP10) : FTW_VOID_NOP;
+        PGO_POP10 ? Connect4_pop10_reset(&profC4, &profP10) : (void)(0);
         Connect4_funcPtrs_init();
         Connect4_globals_init();
 

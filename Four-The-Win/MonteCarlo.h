@@ -878,14 +878,14 @@ static inline void MCTSNode_backpropagate(MCTSNode *restrict _node, double _scor
     while (_node)
     {
         _node->visits++;
-        _WDL == MCTS_DRAW ? MCTSNode_adjustReward(&_score, _node->score) : FTW_VOID_NOP;
+        _WDL == MCTS_DRAW ? MCTSNode_adjustReward(&_score, _node->score) : (void)(0);
         _node->score += _score;
 
-        MCTSNode_prove(_node) ? MCTSTable_insert(&MCTS_table, _node->lock, _node->wdl) : FTW_VOID_NOP;
+        MCTSNode_prove(_node) ? MCTSTable_insert(&MCTS_table, _node->lock, _node->wdl) : (void)(0);
 
         MCTSNode *const restrict parent = _node->ancestor;
 
-        parent && parent->turn != _node->turn ? _score = -_score : FTW_VOID_NOP;
+        parent && parent->turn != _node->turn ? _score = -_score : 0;
 
         //if (MCTSNode_prove(_node) /*&& parent*/)
         /*{
@@ -1000,13 +1000,13 @@ static inline void MCTSResult_print(const MCTSResult *const restrict _RES)
     switch (*_RES->wdl)
     {
     case MCTS_WIN:
-        printf("\r\e[1;92m%c%c %s\e[0m %u %" PRIu64 " %" PRIu64 " %" PRIu64 "        ", M_NOTE_A, M_NOTE_B, FTW_STR_WIN, _RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
+        printf("\r\x1b[1;92m%c%c %s\x1b[0m %u %" PRIu64 " %" PRIu64 " %" PRIu64 "        ", M_NOTE_A, M_NOTE_B, FTW_STR_WIN, _RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
         break;
     case MCTS_DRAW:
-        printf("\r\e[1;93m%c%c %s\e[0m %u %" PRIu64 " %" PRIu64 " %" PRIu64 "        ", M_NOTE_A, M_NOTE_B, FTW_STR_DRAW, _RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
+        printf("\r\x1b[1;93m%c%c %s\x1b[0m %u %" PRIu64 " %" PRIu64 " %" PRIu64 "        ", M_NOTE_A, M_NOTE_B, FTW_STR_DRAW, _RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
         break;
     case MCTS_LOSS:
-        printf("\r\e[1;91m%c%c %s\e[0m %u %" PRIu64 " %" PRIu64 " %" PRIu64 "        ", M_NOTE_A, M_NOTE_B, FTW_STR_LOSS, _RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
+        printf("\r\x1b[1;91m%c%c %s\x1b[0m %u %" PRIu64 " %" PRIu64 " %" PRIu64 "        ", M_NOTE_A, M_NOTE_B, FTW_STR_LOSS, _RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
         break;
     default:
         printf("\r%c%c %.3f %u %" PRIu64 " %" PRIu64 " %" PRIu64 " ", M_NOTE_A, M_NOTE_B, _RES->reward, _RES->depth, *_RES->trials, M_SPEED, *_RES->secs);
@@ -1113,7 +1113,7 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
     Connect4 mctsC4;
     Connect4_Pop10 mctsP10 = *_P10;
 
-    !MCTS_MAKE7 ? Connect4_clone(_C4, &mctsC4) : FTW_VOID_NOP;
+    !MCTS_MAKE7 ? Connect4_clone(_C4, &mctsC4) : (void)(0);
 
     Make7 mctsM7 = *_M7;
 
@@ -1182,7 +1182,7 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
     const MCTSNode *const restrict bestNode = MCTSNode_mostRobust(&rootNode);
 
     mctsRes.move = bestNode->move;
-    *mctsRes.wdl != MCTS_NONE ? MCTSResult_print(&mctsRes) : FTW_VOID_NOP;
+    *mctsRes.wdl != MCTS_NONE ? MCTSResult_print(&mctsRes) : (void)(0);
     putchar('\n');
 
     atomic_store_explicit(&MCTS_run, false, memory_order_relaxed);
@@ -1196,7 +1196,7 @@ static inline MCTSWDL MonteCarloTreeSearch(const Connect4 *const restrict _C4, c
 #endif
     MemoryPool_destroy(&MCTS_entryPool);
 
-    !MCTS_MAKE7 ? Connect4_destroy(&mctsC4) : FTW_VOID_NOP;
+    !MCTS_MAKE7 ? Connect4_destroy(&mctsC4) : (void)(0);
     REC_free(MCTS_termNodes);
     REC_free(MCTS_movArr);
     signal(SIGINT, SIG_DFL);
